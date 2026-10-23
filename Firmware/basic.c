@@ -113,9 +113,18 @@
  */
 #define TOK_MODE 0xA3
 
+/*
+ * `TIME` reads the microsecond timestamp timer (the terminal's `t` and `T`
+ * commands) from inside a program: it yields the timer divided by 64, so
+ * one unit is 64 microseconds. The 16-bit BASIC value wraps around every
+ * ~4.19 seconds, so measure an interval by subtracting two readings.
+ * 0xA4 here: `RESTORE` and `MODE` above took the earlier free values.
+ */
+#define TOK_TIME 0xA4
+
 #define TOK_LEN 0xE0
 
-#define NUMTOKEN (TOK_MODE - TOKENS) + 1
+#define NUMTOKEN (TOK_TIME - TOKENS) + 1
 
 #define STAT_LET "LET"
 #define STAT_IF "IF"
@@ -131,6 +140,7 @@
 #define STAT_TO "TO"
 #define STAT_NEXT "NEXT"
 #define STAT_END "END"
+#define STAT_TIME "TIME"
 #define STAT_READ "READ"
 #define STAT_DATA "DATA"
 #define STAT_RESTORE "RESTORE"
@@ -285,8 +295,9 @@ static char *tokens[NUMTOKEN + 1] = {
 
     STAT_MACRO, // 0xA0
     STAT_END,   // 0xA1
-    STAT_RESTORE, // 0xa2
+STAT_RESTORE, // 0xa2
     STAT_MODE,    // 0xa3
+    STAT_TIME,    // 0xa4
 };
 
 /**
@@ -316,7 +327,7 @@ static bool search_line_number(const uint16_t line, uint16_t *result);
  * the interface with the board hardware.
  *
  * Said tokens are `RECEIVE`, `SEND`, `AUX`, `DAT`, `BITREAD`, `PSU`,
- * `PULLUP`, `ADC`, and `MODE`.
+* `PULLUP`, `ADC`, `MODE`, and `TIME`.
  *
  * @param[in] token the token identifier to handle.
  *
@@ -331,7 +342,8 @@ static bool search_line_number(const uint16_t line, uint16_t *result);
  * @see TOK_PSU
  * @see TOK_PULLUP
  * @see TOK_ADC
- * @see TOK_MODE
+* @see TOK_MODE
+ * @see TOK_TIME
  */
 static uint16_t handle_special_token(const uint8_t token);
 
@@ -468,12 +480,19 @@ uint16_t handle_special_token(const uint8_t token) {
   case TOK_PULLUP:
     return ~BP_PULLUP;
 
-  case TOK_MODE:
+case TOK_MODE:
     /*
      * In an expression, `MODE` reports the bus mode that is currently active,
      * one-based, exactly as the mode menu numbers it.
      */
     return bus_pirate_configuration.bus_mode + 1;
+
+  case TOK_TIME:
+    /*
+     * The 16-bit BASIC value cannot hold microseconds; 64 us units fit
+     * both slowly blinking pulses and ADC-sized timings into one number.
+     */
+    return (uint16_t)(bp_timer_microseconds() >> 6);
 
   case TOK_ADC: {
     bp_enable_adc();

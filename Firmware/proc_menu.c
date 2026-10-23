@@ -656,7 +656,6 @@ void serviceuser(void) {
         repeat = getrepeat() + 1;
         while (--repeat) {
           bp_adc_probe();
-          MSG_VOLTAGE_UNIT;
           bpBR;
         }
         break;
