@@ -108,10 +108,18 @@ void raw2wire_setup_prepare(void) {
     raw2wire_print_settings();
   }
 
-  /* A write never returns a read-back in this mode; clear any stale
+/* A write never returns a read-back in this mode; clear any stale
      write-with-read state carried in from a previous mode (e.g. 3WIRE
      '{'), otherwise every write would print a bogus READ. */
   mode_configuration.write_with_read = NO;
+
+  /*
+   * Apply the timing profile here as well: the interactive flow only runs
+   * setup_execute() on the first power-on request (`W`), so a mode that is
+   * never powered would otherwise clock with the previous mode's profile.
+   * The pins themselves are still configured by setup_execute().
+   */
+  bitbang_setup(2, mode_configuration.speed);
 }
 
 void raw2wire_setup_execute(void) {
