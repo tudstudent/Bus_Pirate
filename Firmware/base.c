@@ -419,6 +419,7 @@ void bp_write_buffer(const uint8_t *buffer, const size_t length) {
     write_cdc((uint16_t)chunk);
     offset += chunk;
   }
+  CDC_Flush_In_Now();
   freeLock();
 #else
   size_t offset;

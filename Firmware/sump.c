@@ -66,6 +66,10 @@ static void sump_stream_close(void) {
     write_cdc(sump_stream_pending);
     sump_stream_pending = 0;
   }
+  /* Push the final partial buffer out now; the stack would otherwise
+     wait for its timeout flush (the ID/metadata replies are a lot
+     smaller than one buffer). */
+  CDC_Flush_In_Now();
   freeLock();
 }
 
