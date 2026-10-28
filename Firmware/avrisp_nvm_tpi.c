@@ -155,7 +155,7 @@ bool avrisp_tiny_write_memory(const uint16_t address, uint8_t *buffer,
     size -= 2;
   }
 
-  return true;
+  return avrisp_tiny_wait_nvm_controller();
 }
 
 bool avrisp_tiny_erase_memory(const uint8_t erase_command,

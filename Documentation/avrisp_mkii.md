@@ -52,7 +52,7 @@ The serial route needs no additional driver at all.
 2. Close the terminal and run, for example:
 
 ```
-avrdude -c stk500v2 -P COM4 -p <part> -U flash:w:<file>.hex
+avrdude -c stk500v2 -P COM4 -b 115200 -p <part> -U flash:w:<file>.hex
 ```
 
 ## Wiring
@@ -73,9 +73,9 @@ PDI (XMEGA) / TPI (TINY):
 
 | programmer pin | BP pin | target pin |
 |---|---|---|
-| CLOCK | CLK | PDI_CLK / TPI_CLK |
+| CLOCK | CLK | PDI_CLK (the XMEGA RESET pin) / TPI_CLK |
 | DATA | MOSI **and** MISO, each through a 220 ohm resistor | PDI_DATA / TPIDATA |
-| /RESET | AUX | /RESET |
+| /RESET (TPI only) | AUX | /RESET (leave AUX unconnected for PDI) |
 | VTARGET sense | ADC | target VCC (optional) |
 | GND | GND | GND |
 
@@ -83,14 +83,32 @@ The two 220 ohm resistors join the Bus Pirate's MOSI and MISO pins into
 the single bidirectional DATA line, the same arrangement LUFA's AVRISP
 project uses.
 
+For ATtiny4/5/9/10, NVM programming requires a **5 V** target supply
+(datasheet 8127H, sections 15.3.1 and 16). Check the exact TPI target's
+requirements and use suitable level translation. RSTDISBL targets that
+require 12 V reset are unsupported; never connect 12 V to a BP pin.
+
 The **VTARGET** parameter reported to avrdude is measured on the BP's
 voltage probe pin (ADC), which has a 2:1 divider and accepts 0 to ~6.6 V.
-If the target supply is not wired to the ADC pin, VTARGET reads 0.
+If the target supply is not wired to the ADC pin, the floating input is
+not a reliable voltage reading. VTARGET is informational; it does not
+set the I/O voltage or interlock programming.
+
+The programmer drives push-pull **3.3 V** signals, including the rescue
+clock, and does not supply target power. Power the target externally and
+connect grounds. Use appropriate bidirectional level translation for
+incompatible target voltages/logic thresholds; a 5 V-tolerant input is
+not a 5 V output. The 220 ohm resistors are not level shifters. Entry
+from BBIO resets/disables the Bus Pirate's power and pull-ups.
 
 The **rescue clock** runs continuously on the CS pin at 4 MHz while the
 personality is active.  For targets whose fuses select an external
 clock, wire CS to the target's XTAL1 pin and use 125 kHz ISP speed
-(`-B 125`), exactly as for a real AVRISP-MKII clone.
+(`-B 8`, a period of 8 microseconds). `-B 125` means 125 microseconds
+(8 kHz), not 125 kHz. The rescue clock pauses during AVR053 OSCCAL,
+when the same PWM generator supplies a 32.787 kHz calibration clock
+on MOSI. OSCCAL requires AVR053 calibration firmware on the target;
+it does not install that firmware or directly program an OSCCAL fuse.
 
 ## Notes and limitations
 
@@ -99,5 +117,23 @@ clock, wire CS to the target's XTAL1 pin and use 125 kHz ISP speed
   v3 build as build-verified only.
 - TPI: the protocol engine is complete, but no TPI-capable target was
   available for bench verification yet.
-- The previously shipped `Firmware-Alternates/firmware-STK500v2`
-  alternate firmware is superseded by this built-in personality.
+- All routes are build-verified only until bench testing is completed.
+  PDI/TPI bit timing, USB re-enumeration, and rescue/calibration clocks
+  must be checked on the combined firmware before trusting writes.
+- Timer 3 supplies the 10 ms watchdog; Timer 4 supplies a 25 kHz idle
+  PDI/TPI clock between commands. Byte transfers use software clocking
+  at approximately 125 kHz. Timer 1 remains the normal delay timebase;
+  Timer 2 and OC5 supply the rescue/calibration clock.
+- Requests and reads support up to 256 memory data bytes. XMEGA pages
+  larger than this are split by avrdude. The one-second target watchdog
+  limits how much can be transferred at the slowest ISP rates; use small
+  blocks with a custom host there. Software SPI rates are approximate
+  (integer-microsecond delays plus firmware overhead).
+- Parameters reset on mode entry; SCK duration and reset polarity are
+  not persisted to EEPROM as they are in LUFA.
+- Malformed, oversized, and unknown requests receive failure/unknown
+  status rather than LUFA's stall/no-reply paths. XPROG CRC preserves
+  LUFA's unusual high-byte, low-byte, middle-byte reply order.
+- The historical `Firmware-Alternates/firmware-STK500v2` tree remains
+  in the repository pending the separate post-bench cleanup; this
+  built-in personality is its intended replacement.

@@ -4,7 +4,8 @@
  * @brief AVRISP-MKII personality - ISP protocol handlers and physical layer.
  *
  * Port of LUFA's ISPProtocol.c / ISPTarget.c (Copyright (C) Dean Camera,
- * 2021; MIT-style licence).  Hardware SPI runs through the PIC24 SPI
+ * 2021; Copyright 2019 Jacob September (jacobseptember [at] gmail [dot] com);
+ * MIT-style licence).  Hardware SPI runs through the PIC24 SPI
  * module with PPS routing; the slow end of the AVR069 speed ladder uses a
  * blocking software SPI.  The target reset line is the AUX pin and the
  * 4 MHz rescue clock is generated on the CS pin by output compare 5.
@@ -15,6 +16,7 @@
 #include "base.h"
 #include "avrisp_mkii.h"
 #include "avrisp_v2.h"
+#include "avrisp_xprog.h"
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
@@ -83,12 +85,22 @@ static void avrisp_isp_rescue_clock_enable(void) {
      timer 2 with the output routed to the CS pin. */
   T2CON = 0x0000;
   OC5CON = 0x0000;
+  TMR2 = 0;
+
+#ifdef BUSPIRATEV4
+  /* Enhanced OC: OCxRS is the period, OCxR the duty, self-synchronized. */
+  OC5CON2 = 0x001F;
+  OC5TMR = 0;
+  OC5R = 2;
+  OC5RS = 3;
+#else
+  OC5R = 2;
+  OC5RS = 2;
+#endif
 
   BP_CS_RPOUT = OC5_IO;
   BP_CS_DIR = OUTPUT;
 
-  OC5R = 2;
-  OC5RS = 2;
   PR2 = 3; /* Four 62.5 ns ticks: 4 MHz, 50% duty cycle. */
 
   OC5CON = 0x0006; /* PWM mode, no fault pin. */
@@ -99,9 +111,12 @@ static void avrisp_isp_rescue_clock_disable(void) {
   T2CONbits.TON = OFF;
   T2CON = 0x0000;
   OC5CON = 0x0000;
+#ifdef BUSPIRATEV4
+  OC5CON2 = 0;
+#endif
 
   BP_CS_RPOUT = 0;
-  BP_CS = LOW;
+  AVRISP_CS_LAT = LOW;
   BP_CS_DIR = INPUT;
 }
 
@@ -141,12 +156,12 @@ static uint8_t avrisp_isp_transfer_software(const uint8_t value) {
   uint8_t received = 0;
 
   for (uint8_t bit = 0; bit < 8; bit++) {
-    BP_CLK = LOW;
-    BP_MOSI = (data & 0x80) ? HIGH : LOW;
+    AVRISP_CLK_LAT = LOW;
+    AVRISP_MOSI_LAT = (data & 0x80) ? HIGH : LOW;
     data <<= 1;
     avrisp_isp_delay_us_checked(half_period);
 
-    BP_CLK = HIGH;
+    AVRISP_CLK_LAT = HIGH;
     avrisp_isp_delay_us_checked(half_period);
     received = (received << 1) | ((BP_MISO == HIGH) ? 1 : 0);
 
@@ -155,10 +170,14 @@ static uint8_t avrisp_isp_transfer_software(const uint8_t value) {
     }
   }
 
+  AVRISP_CLK_LAT = LOW;
   return received;
 }
 
 static uint8_t avrisp_isp_transfer_byte(const uint8_t value) {
+  if (!avrisp_timeout_ticks) {
+    return 0xFF;
+  }
   if (avrisp_isp_hardware_spi) {
     return avrisp_isp_transfer_hardware(value);
   }
@@ -215,7 +234,7 @@ static void avrisp_isp_enable_target(void) {
     BP_MISO_DIR = INPUT;
     BP_MOSI_DIR = OUTPUT;
     BP_CLK_DIR = OUTPUT;
-    BP_CLK = LOW;
+    AVRISP_CLK_LAT = LOW;
   }
 }
 
@@ -226,9 +245,9 @@ static void avrisp_isp_disable_target(void) {
   BP_MOSI_RPOUT = 0;
   BP_CLK_RPOUT = 0;
 
-  BP_MOSI = LOW;
+  AVRISP_MOSI_LAT = LOW;
   BP_MOSI_DIR = INPUT;
-  BP_CLK = LOW;
+  AVRISP_CLK_LAT = LOW;
   BP_CLK_DIR = INPUT;
   BP_MISO_DIR = INPUT;
 }
@@ -239,16 +258,15 @@ static void avrisp_isp_disable_target(void) {
  */
 static void avrisp_isp_change_reset_line(const bool assert) {
   if (assert) {
-    BP_AUX0_DIR = OUTPUT;
-
     if (!avrisp_param_get(PARAM_RESET_POLARITY)) {
-      BP_AUX0 = HIGH;
+      AVRISP_AUX_LAT = HIGH;
     } else {
-      BP_AUX0 = LOW;
+      AVRISP_AUX_LAT = LOW;
     }
+    BP_AUX0_DIR = OUTPUT;
   } else {
     BP_AUX0_DIR = INPUT;
-    BP_AUX0 = LOW;
+    AVRISP_AUX_LAT = LOW;
   }
 }
 
@@ -280,6 +298,9 @@ static uint8_t avrisp_isp_wait_for_prog_complete(
   case PROG_MODE_WORD_TIMEDELAY_MASK:
   case PROG_MODE_PAGED_TIMEDELAY_MASK:
     avrisp_isp_delay_ms(delay_ms);
+    if (!avrisp_timeout_ticks) {
+      status = STATUS_CMD_TOUT;
+    }
     break;
 
   case PROG_MODE_WORD_VALUE_MASK:
@@ -313,10 +334,25 @@ static uint8_t avrisp_isp_wait_for_prog_complete(
  * ------------------------------------------------------------------------- */
 
 void avrisp_isp_initialise(void) {
+  SPI1STATbits.SPIEN = OFF;
+  BP_MOSI_RPOUT = 0;
+  BP_CLK_RPOUT = 0;
+  BP_MISO_RPOUT = 0;
+  BP_AUX_RPOUT = 0;
+  BP_MOSI_ODC = 0;
+  BP_CLK_ODC = 0;
+  BP_MISO_ODC = 0;
+  BP_CS_ODC = 0;
+#ifdef BUSPIRATEV4
+  BP_AUX_ODC = 0;
+#else
+  BP_AUX0_ODC = 0;
+#endif
   avrisp_isp_rescue_clock_enable();
 }
 
 void avrisp_isp_shutdown(void) {
+  avrisp_isp_change_reset_line(false);
   avrisp_isp_disable_target();
   avrisp_isp_rescue_clock_disable();
 }
@@ -346,6 +382,8 @@ void avrisp_isp_enter_mode(void) {
   uint8_t response_status = STATUS_CMD_FAILED;
 
   avrisp_current_address = 0;
+  avrisp_load_extended_address = false;
+  avrisp_xprog_shutdown();
 
   avrisp_isp_delay_ms(execution_delay);
   avrisp_isp_enable_target();
@@ -430,11 +468,13 @@ void avrisp_isp_program_memory(const uint8_t command) {
   uint8_t poll_value = (command == CMD_PROGRAM_FLASH_ISP) ? poll_value1
                                                           : poll_value2;
   uint16_t poll_address = 0;
+  bool poll_address_valid = false;
   uint16_t page_start_address = (avrisp_current_address & 0xFFFF);
 
   for (uint16_t current_byte = 0; current_byte < bytes_to_write;
        current_byte++) {
     uint8_t byte_to_write = avrisp_command_buffer[current_byte];
+    uint8_t byte_mode = programming_mode;
 
     if (avrisp_load_extended_address) {
       avrisp_isp_load_extended_address();
@@ -446,12 +486,17 @@ void avrisp_isp_program_memory(const uint8_t command) {
     avrisp_isp_send_byte(avrisp_current_address & 0xFF);
     avrisp_isp_send_byte(byte_to_write);
 
+    if (!avrisp_timeout_ticks) {
+      programming_status = STATUS_CMD_TOUT;
+      break;
+    }
+
     /* FLASH addressing writes the high byte on odd byte indices. */
     if (command == CMD_PROGRAM_FLASH_ISP) {
       programming_commands[0] ^= READ_WRITE_HIGH_BYTE_MASK;
     }
 
-    if (!poll_address && (byte_to_write != poll_value)) {
+    if (!poll_address_valid && (byte_to_write != poll_value)) {
       if ((current_byte & 0x01) && (command == CMD_PROGRAM_FLASH_ISP)) {
         programming_commands[2] |= READ_WRITE_HIGH_BYTE_MASK;
       } else {
@@ -459,17 +504,18 @@ void avrisp_isp_program_memory(const uint8_t command) {
       }
 
       poll_address = (avrisp_current_address & 0xFFFF);
+      poll_address_valid = true;
     }
 
     if (!(programming_mode & PROG_MODE_PAGED_WRITES_MASK)) {
-      if (!poll_address &&
+      if (!poll_address_valid &&
           !(programming_mode & PROG_MODE_WORD_READYBUSY_MASK)) {
-        programming_mode = (programming_mode & ~PROG_MODE_WORD_VALUE_MASK) |
+        byte_mode = (programming_mode & ~PROG_MODE_WORD_VALUE_MASK) |
                            PROG_MODE_WORD_TIMEDELAY_MASK;
       }
 
       programming_status = avrisp_isp_wait_for_prog_complete(
-          programming_mode, poll_address, poll_value, delay_ms,
+          byte_mode, poll_address, poll_value, delay_ms,
           programming_commands[2]);
 
       if (programming_status != STATUS_CMD_OK) {
@@ -477,6 +523,7 @@ void avrisp_isp_program_memory(const uint8_t command) {
       }
 
       poll_address = 0;
+      poll_address_valid = false;
     }
 
     if ((current_byte & 0x01) || (command == CMD_PROGRAM_EEPROM_ISP)) {
@@ -489,13 +536,14 @@ void avrisp_isp_program_memory(const uint8_t command) {
     }
   }
 
-  if (programming_mode & PROG_MODE_COMMIT_PAGE_MASK) {
+  if ((programming_mode & PROG_MODE_COMMIT_PAGE_MASK) &&
+      programming_status == STATUS_CMD_OK) {
     avrisp_isp_send_byte(programming_commands[1]);
     avrisp_isp_send_byte(page_start_address >> 8);
     avrisp_isp_send_byte(page_start_address & 0xFF);
     avrisp_isp_send_byte(0x00);
 
-    if ((programming_mode & PROG_MODE_PAGED_VALUE_MASK) && !poll_address) {
+    if ((programming_mode & PROG_MODE_PAGED_VALUE_MASK) && !poll_address_valid) {
       programming_mode = (programming_mode & ~PROG_MODE_PAGED_VALUE_MASK) |
                          PROG_MODE_PAGED_TIMEDELAY_MASK;
     }
@@ -557,7 +605,7 @@ void avrisp_isp_read_memory(const uint8_t command) {
     }
   }
 
-  avrisp_write_byte(STATUS_CMD_OK);
+  avrisp_write_byte(avrisp_timeout_ticks ? STATUS_CMD_OK : STATUS_CMD_TOUT);
   avrisp_response_end();
 }
 
@@ -580,6 +628,9 @@ void avrisp_isp_chip_erase(void) {
 
   if (!poll_method) {
     avrisp_isp_delay_ms(erase_delay);
+    if (!avrisp_timeout_ticks) {
+      response_status = STATUS_CMD_TOUT;
+    }
   } else {
     response_status = avrisp_isp_wait_while_busy();
   }
@@ -590,8 +641,9 @@ void avrisp_isp_chip_erase(void) {
 }
 
 void avrisp_isp_calibrate(void) {
-  /* AVR053: toggle MOSI at ~32.768 kHz, count MISO toggles. */
+  /* AVR053 section 2: a hardware C-clock avoids software/USB ISR jitter. */
   uint8_t response_status = STATUS_CMD_OK;
+  avrisp_xprog_shutdown();
 
   SPI1STATbits.SPIEN = OFF;
   BP_MOSI_RPOUT = 0;
@@ -602,17 +654,42 @@ void avrisp_isp_calibrate(void) {
 
   avrisp_response_begin();
 
+  avrisp_isp_rescue_clock_disable();
+  TMR2 = 0;
+  PR2 = 487; /* 16 MHz / 488 = 32786.9 Hz (+0.058% vs 32768 Hz). */
+  OC5R = 244;
+#ifdef BUSPIRATEV4
+  OC5CON2 = 0x001F;
+  OC5TMR = 0;
+  OC5RS = 487;
+#else
+  OC5RS = 244;
+#endif
+  BP_MOSI_RPOUT = OC5_IO;
+  OC5CON = 0x0006;
+  IFS0bits.T2IF = 0;
+  T2CONbits.TON = ON;
+
+#ifdef BUSPIRATEV4
+  uint16_t saved_pullup = CNPU4bits.CN52PUE;
+  CNPU4bits.CN52PUE = 1;
+#else
+  uint16_t saved_pullup = CNPU2bits.CN23PUE;
+  CNPU2bits.CN23PUE = 1;
+#endif
+
   /* Release ~RESET. */
   avrisp_isp_change_reset_line(false);
 
-  uint16_t half_cycles_remaining = (2 * 1024) + 50;
+  uint16_t cycles_remaining = 1024 + 25;
   uint8_t toggles_remaining = 8;
   bool previous_level = (BP_MISO == HIGH);
 
-  while (half_cycles_remaining-- && toggles_remaining) {
-    BP_MOSI ^= ON;
-    bp_delay_us(15);
-
+  while (cycles_remaining && toggles_remaining && avrisp_timeout_ticks) {
+    if (IFS0bits.T2IF) {
+      IFS0bits.T2IF = 0;
+      cycles_remaining--;
+    }
     bool current_level = (BP_MISO == HIGH);
 
     if (current_level != previous_level) {
@@ -624,6 +701,17 @@ void avrisp_isp_calibrate(void) {
   if (toggles_remaining) {
     response_status = STATUS_CMD_TOUT;
   }
+
+  OC5CON = 0;
+  BP_MOSI_RPOUT = 0;
+  AVRISP_MOSI_LAT = LOW;
+  BP_MOSI_DIR = INPUT;
+#ifdef BUSPIRATEV4
+  CNPU4bits.CN52PUE = saved_pullup;
+#else
+  CNPU2bits.CN23PUE = saved_pullup;
+#endif
+  avrisp_isp_rescue_clock_enable();
 
   avrisp_write_byte(CMD_OSCCAL);
   avrisp_write_byte(response_status);
@@ -678,17 +766,6 @@ void avrisp_isp_spi_multi(void) {
   uint8_t rx_bytes = avrisp_read_byte();
   uint8_t rx_start = avrisp_read_byte();
 
-  if (tx_bytes >= 255) {
-    /* The buffer cannot hold this request; hosts stay well below. */
-    avrisp_discard_incoming();
-
-    avrisp_response_begin();
-    avrisp_write_byte(CMD_SPI_MULTI);
-    avrisp_write_byte(STATUS_CMD_FAILED);
-    avrisp_response_end();
-    return;
-  }
-
   for (uint8_t index = 0; index < tx_bytes; index++) {
     avrisp_command_buffer[index] = avrisp_read_byte();
   }
@@ -697,7 +774,7 @@ void avrisp_isp_spi_multi(void) {
   avrisp_write_byte(CMD_SPI_MULTI);
   avrisp_write_byte(STATUS_CMD_OK);
 
-  uint8_t tx_position = 0;
+  uint16_t tx_position = 0;
   uint8_t rx_position = 0;
 
   while (tx_position < rx_start) {
@@ -715,6 +792,10 @@ void avrisp_isp_spi_multi(void) {
 
     avrisp_write_byte(received);
     rx_position++;
+  }
+
+  while (tx_position < tx_bytes) {
+    avrisp_isp_send_byte(avrisp_command_buffer[tx_position++]);
   }
 
   avrisp_write_byte(STATUS_CMD_OK);

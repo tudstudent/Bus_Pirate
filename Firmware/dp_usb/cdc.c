@@ -122,6 +122,10 @@ void user_configured_init(void) {
 
     usb_register_class_setup_handler(cdc_setup);
     cdc_trf_state = 0;
+    usb_register_sof_handler(CDCFlushOnTimeout);
+    cdc_timeout_count = 0;
+    ZLPpending = 0;
+    lock = 0;
     CDC_Outbdp = &usb_bdt[USB_CALC_BD(2, USB_DIR_OUT, USB_PP_EVEN)];
     CDC_Inbdp = &usb_bdt[USB_CALC_BD(2, USB_DIR_IN, USB_PP_EVEN)];
 

@@ -34,6 +34,40 @@ uint8_t avrisp_xprog_selected_protocol = XPROG_PROTOCOL_PDI;
 
 /** True while the programmer drives the DATA line. */
 static bool avrisp_xprog_sending;
+static bool avrisp_xprog_clock_enabled;
+
+/* Host/USB waits must not trip PDI's ~10 kHz inactivity detector. */
+#pragma interrupt _T4Interrupt
+void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
+  AVRISP_CLK_LAT = LOW;
+  /* Do not use REPEAT here: inline asm would clobber interrupted RCOUNT. */
+  __asm__ volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n"
+                   "nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop");
+  AVRISP_CLK_LAT = HIGH;
+  IFS1bits.T4IF = 0;
+}
+
+void avrisp_xprog_pause_clock(void) {
+  IEC1bits.T4IE = 0;
+}
+
+void avrisp_xprog_resume_clock(void) {
+  if (avrisp_xprog_clock_enabled && !IEC1bits.T4IE) {
+    TMR4 = 0;
+    IFS1bits.T4IF = 0;
+    IEC1bits.T4IE = 1;
+  }
+}
+
+static void avrisp_xprog_start_clock(void) {
+  T4CON = 0;
+  TMR4 = 0;
+  PR4 = 639; /* 25 kHz idle clock at FCY=16 MHz, 1:1 prescale. */
+  IPC6bits.T4IP = 6;
+  IFS1bits.T4IF = 0;
+  avrisp_xprog_clock_enabled = true;
+  T4CONbits.TON = ON;
+}
 
 /* -------------------------------------------------------------------------
  * Physical layer (software synchronous USRT).
@@ -55,15 +89,15 @@ static bool avrisp_xprog_bit_period(const bool drive, const bool bit,
                                     const bool sample) {
   bool sampled_level = true;
 
-  BP_CLK = LOW;
+  AVRISP_CLK_LAT = LOW;
 
   if (drive) {
-    BP_MOSI = bit ? HIGH : LOW;
+    AVRISP_MOSI_LAT = bit ? HIGH : LOW;
   }
 
   bp_delay_us(XPROG_BIT_HALF_US);
 
-  BP_CLK = HIGH;
+  AVRISP_CLK_LAT = HIGH;
   bp_delay_us(XPROG_BIT_HALF_US);
 
   if (sample) {
@@ -75,11 +109,10 @@ static bool avrisp_xprog_bit_period(const bool drive, const bool bit,
 
 static void avrisp_xprog_set_transmit_mode(void) {
   if (!avrisp_xprog_sending) {
+    /* RX->TX requires an actual idle clock, not merely a delay. */
+    (void)avrisp_xprog_bit_period(false, false, false);
+    AVRISP_MOSI_LAT = HIGH;
     BP_MOSI_DIR = OUTPUT;
-    BP_MOSI = HIGH;
-
-    /* Wait for a full clock cycle before driving the line (LUFA parity). */
-    bp_delay_us(2 * XPROG_BIT_HALF_US);
 
     avrisp_xprog_sending = true;
   }
@@ -90,14 +123,20 @@ static void avrisp_xprog_set_receive_mode(void) {
     /* Let the last stop bit period complete, then release the line. */
     bp_delay_us(2 * XPROG_BIT_HALF_US);
 
-    BP_MOSI = LOW;
     BP_MOSI_DIR = INPUT;
+    AVRISP_MOSI_LAT = LOW;
 
     avrisp_xprog_sending = false;
   }
 }
 
 void avrisp_xprog_send_byte(const uint8_t byte) {
+  /* Parsing/buffering keeps the idle ISR running. Only a target exchange
+     takes exclusive clock ownership, until response_end resumes idles. */
+  avrisp_xprog_pause_clock();
+  if (!avrisp_timeout_ticks) {
+    return;
+  }
   avrisp_xprog_set_transmit_mode();
 
   /* Start bit, 8 data bits (LSB first), even parity, two stop bits. */
@@ -113,6 +152,7 @@ void avrisp_xprog_send_byte(const uint8_t byte) {
 }
 
 uint8_t avrisp_xprog_receive_byte(void) {
+  avrisp_xprog_pause_clock();
   avrisp_xprog_set_receive_mode();
 
   /* Clock the line until the target's start bit is sampled low. */
@@ -134,14 +174,19 @@ uint8_t avrisp_xprog_receive_byte(void) {
     }
   }
 
-  (void)avrisp_xprog_bit_period(false, false, true); /* parity */
-  (void)avrisp_xprog_bit_period(false, false, true); /* stop 1 */
-  (void)avrisp_xprog_bit_period(false, false, true); /* stop 2 */
+  bool parity = avrisp_xprog_bit_period(false, false, true);
+  bool stop1 = avrisp_xprog_bit_period(false, false, true);
+  bool stop2 = avrisp_xprog_bit_period(false, false, true);
+  if (parity != avrisp_xprog_parity(value) || !stop1 || !stop2) {
+    avrisp_timeout_ticks = 0;
+    return 0xFF;
+  }
 
   return value;
 }
 
 void avrisp_xprog_send_idle(void) {
+  avrisp_xprog_pause_clock();
   /* One IDLE character: 12 bit periods with the line held high. */
   avrisp_xprog_set_transmit_mode();
 
@@ -155,6 +200,10 @@ void avrisp_xprog_send_idle(void) {
  * ------------------------------------------------------------------------- */
 
 void avrisp_xprog_initialise(void) {
+  IEC1bits.T4IE = 0;
+  T4CON = 0;
+  avrisp_xprog_clock_enabled = false;
+  avrisp_xprog_sending = false;
   avrisp_xprog_nvm_base = 0x010001C0;
   avrisp_xprog_eeprom_page_size = 32;
   avrisp_xprog_nvm_cmd_reg = 0x33;
@@ -163,71 +212,94 @@ void avrisp_xprog_initialise(void) {
 }
 
 void avrisp_xprog_shutdown(void) {
+  avrisp_xprog_pause_clock();
+  if (avrisp_xprog_clock_enabled) {
+    /* TPI must clear NVMEN before releasing RESET, even on idle exit. */
+    avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
+    if (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_PDI) {
+      avrisp_xmega_disable_pdi();
+    } else {
+      avrisp_tiny_disable_tpi();
+    }
+  }
+  IEC1bits.T4IE = 0;
+  T4CON = 0;
+  IFS1bits.T4IF = 0;
+  avrisp_xprog_clock_enabled = false;
   avrisp_xprog_sending = false;
 
   BP_CLK_RPOUT = 0;
   BP_MOSI_RPOUT = 0;
 
-  BP_CLK = LOW;
+  AVRISP_CLK_LAT = LOW;
   BP_CLK_DIR = INPUT;
-  BP_MOSI = LOW;
+  AVRISP_MOSI_LAT = LOW;
   BP_MOSI_DIR = INPUT;
   BP_MISO_DIR = INPUT;
 
-  BP_AUX0 = LOW;
+  AVRISP_AUX_LAT = LOW;
   BP_AUX0_DIR = INPUT;
 }
 
 void avrisp_xprog_enable_target_pdi(void) {
+  SPI1STATbits.SPIEN = OFF;
+  avrisp_xprog_pause_clock();
   avrisp_xprog_sending = false;
 
   /* Clock and data become plain outputs (PPS detached). */
   BP_CLK_RPOUT = 0;
   BP_MOSI_RPOUT = 0;
+  AVRISP_CLK_LAT = HIGH;
   BP_CLK_DIR = OUTPUT;
-  BP_CLK = HIGH;
   BP_MISO_DIR = INPUT;
 
-  /* DATA low for at least 90 ns disables the reset function. */
+  /* Match LUFA's preamble; DATA high for >90 ns disables RESET on AU. */
+  AVRISP_MOSI_LAT = LOW;
   BP_MOSI_DIR = OUTPUT;
-  BP_MOSI = LOW;
   bp_delay_us(100);
 
   /* DATA high enables the PDI interface. */
-  BP_MOSI = HIGH;
+  AVRISP_MOSI_LAT = HIGH;
   bp_delay_us(20);
 
   /* Two IDLEs (24 PDI_CLK cycles) enable the interface. */
   avrisp_xprog_send_idle();
   avrisp_xprog_send_idle();
+  avrisp_xprog_start_clock();
 }
 
 void avrisp_xprog_enable_target_tpi(void) {
+  SPI1STATbits.SPIEN = OFF;
+  avrisp_xprog_pause_clock();
   avrisp_xprog_sending = false;
 
   /* /RESET low for at least 400 ns enables TPI functionality. */
+  AVRISP_AUX_LAT = LOW;
   BP_AUX0_DIR = OUTPUT;
-  BP_AUX0 = LOW;
   bp_delay_us(100);
 
   BP_CLK_RPOUT = 0;
   BP_MOSI_RPOUT = 0;
+  AVRISP_CLK_LAT = HIGH;
   BP_CLK_DIR = OUTPUT;
-  BP_CLK = HIGH;
+  AVRISP_MOSI_LAT = HIGH;
   BP_MOSI_DIR = OUTPUT;
-  BP_MOSI = HIGH;
   BP_MISO_DIR = INPUT;
 
   avrisp_xprog_send_idle();
   avrisp_xprog_send_idle();
+  avrisp_xprog_start_clock();
 }
 
 void avrisp_xprog_disable_target_pdi(void) {
+  avrisp_xprog_pause_clock();
+  avrisp_xprog_clock_enabled = false;
+  T4CON = 0;
   avrisp_xprog_set_receive_mode();
 
-  BP_CLK = LOW;
+  AVRISP_CLK_LAT = LOW;
   BP_CLK_DIR = INPUT;
-  BP_MOSI = LOW;
+  AVRISP_MOSI_LAT = LOW;
   BP_MOSI_DIR = INPUT;
   BP_MISO_DIR = INPUT;
 }
@@ -235,7 +307,7 @@ void avrisp_xprog_disable_target_pdi(void) {
 void avrisp_xprog_disable_target_tpi(void) {
   avrisp_xprog_disable_target_pdi();
 
-  BP_AUX0 = LOW;
+  AVRISP_AUX_LAT = LOW;
   BP_AUX0_DIR = INPUT;
 }
 
@@ -248,11 +320,17 @@ void avrisp_xprog_set_mode(void) {
 
   avrisp_response_begin();
 
-  avrisp_xprog_selected_protocol = protocol;
+  bool supported = (protocol == XPROG_PROTOCOL_PDI ||
+                    protocol == XPROG_PROTOCOL_TPI);
+  if (supported) {
+    if (avrisp_xprog_clock_enabled) {
+      avrisp_xprog_shutdown();
+    }
+    avrisp_xprog_selected_protocol = protocol;
+  }
 
   avrisp_write_byte(CMD_XPROG_SETMODE);
-  avrisp_write_byte((protocol != XPROG_PROTOCOL_JTAG) ? STATUS_CMD_OK
-                                                      : STATUS_CMD_FAILED);
+  avrisp_write_byte(supported ? STATUS_CMD_OK : STATUS_CMD_FAILED);
   avrisp_response_end();
 }
 
@@ -284,7 +362,7 @@ static void avrisp_xprog_leave_mode(void) {
 
   avrisp_write_byte(CMD_XPROG);
   avrisp_write_byte(XPROG_CMD_LEAVE_PROGMODE);
-  avrisp_write_byte(XPROG_ERR_OK);
+  avrisp_write_byte(avrisp_timeout_ticks ? XPROG_ERR_OK : XPROG_ERR_TIMEOUT);
   avrisp_response_end();
 }
 
@@ -299,6 +377,15 @@ static void avrisp_xprog_erase(void) {
   avrisp_response_begin();
 
   uint8_t status = XPROG_ERR_OK;
+
+  if (memory_type < XPROG_ERASE_CHIP || memory_type > XPROG_ERASE_CONFIG ||
+      (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_TPI && address > 0xffffUL)) {
+    avrisp_write_byte(CMD_XPROG);
+    avrisp_write_byte(XPROG_CMD_ERASE);
+    avrisp_write_byte(XPROG_ERR_FAILED);
+    avrisp_response_end();
+    return;
+  }
 
   if (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_PDI) {
     uint8_t erase_command;
@@ -329,8 +416,11 @@ static void avrisp_xprog_erase(void) {
       erase_command = XMEGA_NVM_CMD_ERASEUSERSIG;
       break;
     default:
-      erase_command = XMEGA_NVM_CMD_NOOP;
-      break;
+      avrisp_write_byte(CMD_XPROG);
+      avrisp_write_byte(XPROG_CMD_ERASE);
+      avrisp_write_byte(XPROG_ERR_FAILED);
+      avrisp_response_end();
+      return;
     }
 
     if (!avrisp_xmega_erase_memory(erase_command, address)) {
@@ -368,7 +458,14 @@ static void avrisp_xprog_write_memory(void) {
   length_low = avrisp_read_byte();
   length = ((uint16_t)length_high << 8) | length_low;
 
-  if (length >= 256) {
+  if (length > 256 || memory_type < XPROG_MEM_TYPE_APPL ||
+      memory_type > XPROG_MEM_TYPE_USERSIG ||
+      (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_PDI &&
+       (memory_type == XPROG_MEM_TYPE_FUSE ||
+        memory_type == XPROG_MEM_TYPE_LOCKBITS) && length != 1) ||
+      (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_TPI &&
+       (!length || (address & 1) || address > 0xffffUL ||
+        address + ((length + 1u) & ~1u) > 0x10000UL))) {
     /* The request cannot be buffered; hosts stay well below. */
     avrisp_discard_incoming();
 
@@ -457,7 +554,10 @@ static void avrisp_xprog_read_memory(void) {
   length_low = avrisp_read_byte();
   length = ((uint16_t)length_high << 8) | length_low;
 
-  if (length > 256) {
+  if (length > 256 || memory_type < XPROG_MEM_TYPE_APPL ||
+      memory_type > XPROG_MEM_TYPE_FACTORY_CALIBRATION ||
+      (avrisp_xprog_selected_protocol == XPROG_PROTOCOL_TPI &&
+       (address > 0xffffUL || address + length > 0x10000UL))) {
     /* The response cannot buffer this; hosts stay at or below 256. */
     avrisp_discard_incoming();
 
@@ -560,7 +660,12 @@ static void avrisp_xprog_set_param(void) {
     uint8_t high = avrisp_read_byte();
     uint8_t low = avrisp_read_byte();
 
-    avrisp_xprog_eeprom_page_size = ((uint16_t)high << 8) | low;
+    uint16_t value = ((uint16_t)high << 8) | low;
+    if (value && value <= 256) {
+      avrisp_xprog_eeprom_page_size = value;
+    } else {
+      status = XPROG_ERR_FAILED;
+    }
     break;
   }
 
@@ -624,8 +729,11 @@ void avrisp_xprog_command(void) {
     break;
 
   default:
-    /* LUFA ignores unknown XPROG subcommands without a reply; hosts
-       only send the commands above. */
+    avrisp_response_begin();
+    avrisp_write_byte(CMD_XPROG);
+    avrisp_write_byte(command);
+    avrisp_write_byte(XPROG_ERR_FAILED);
+    avrisp_response_end();
     break;
   }
 }

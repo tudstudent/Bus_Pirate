@@ -55,11 +55,11 @@ static volatile uint16_t avrisp_activity_ticks;
 /** Active transport. */
 static avrisp_transport_kind_t avrisp_transport;
 
-/** Number of request bytes read for the command being processed. */
-static uint16_t avrisp_bytes_read;
-
 /** Number of bytes in the response being built. */
 static uint16_t avrisp_response_length;
+
+static uint16_t avrisp_request_length;
+static uint16_t avrisp_request_position;
 
 /* -------------------------------------------------------------------------
  * Mode timer: 10 ms tick for the command and idle watchdogs.
@@ -82,6 +82,7 @@ static void avrisp_timer_start(void) {
   T3CON = 0x0000;
   TMR3 = 0x0000;
   PR3 = 624;
+  IPC2bits.T3IP = 4;
   T3CONbits.TCKPS = 0b11;
   IFS0bits.T3IF = 0;
   IEC0bits.T3IE = 1;
@@ -101,7 +102,7 @@ static void avrisp_timer_stop(void) {
 #ifdef BUSPIRATEV4
 
 /** True while the mkII USB personality is enumerated. */
-bool avrisp_usb_personality_active;
+volatile bool avrisp_usb_personality_active;
 
 extern volatile uint8_t usb_device_state;
 
@@ -131,7 +132,7 @@ static ROMPTR const unsigned char avrisp_config_descriptor[] = {
     1u,                          /* bNumInterfaces */
     1u,                          /* bConfigurationValue */
     0u,                          /* iConfiguration */
-    0xC0,                        /* bmAttributes (self powered) */
+    0x80,                        /* bmAttributes (bus powered) */
     0x32,                        /* bMaxPower (100 mA) */
 
     0x09,                        /* bLength */
@@ -173,11 +174,10 @@ static ROMPTR const unsigned char avrisp_string_descriptors[] = {
 
 static uint8_t avrisp_usb_out_buffer[AVRISP_USB_PACKET_SIZE];
 static uint8_t avrisp_usb_in_buffer[AVRISP_USB_PACKET_SIZE];
-static BDentry *avrisp_ep_out;
-static BDentry *avrisp_ep_in;
+static volatile BDentry *volatile avrisp_ep_out;
+static volatile BDentry *volatile avrisp_ep_in;
 static bool avrisp_ep_out_owned;
 static uint16_t avrisp_ep_out_length;
-static uint16_t avrisp_ep_out_position;
 
 void avrisp_usb_configure_endpoints(void) {
   usb_unset_in_handler(1);
@@ -201,7 +201,6 @@ void avrisp_usb_configure_endpoints(void) {
 
   avrisp_ep_out_owned = false;
   avrisp_ep_out_length = 0;
-  avrisp_ep_out_position = 0;
 }
 
 /** Re-arms the OUT endpoint, dropping any bytes left in the buffer. */
@@ -216,50 +215,38 @@ static void avrisp_usb_release_packet(void) {
 
   avrisp_ep_out_owned = false;
   avrisp_ep_out_length = 0;
-  avrisp_ep_out_position = 0;
 }
 
 /** Waits for the next OUT packet, bounded by the command watchdog. */
 static bool avrisp_usb_wait_packet(void) {
   while (avrisp_ep_out->BDSTAT & UOWN) {
-    if (!avrisp_timeout_ticks) {
+    if (!avrisp_timeout_ticks || usb_device_state < CONFIGURED_STATE) {
       return false;
     }
   }
 
   avrisp_ep_out_owned = true;
   avrisp_ep_out_length = avrisp_ep_out->BDCNT;
-  avrisp_ep_out_position = 0;
   return true;
 }
 
-static uint8_t avrisp_usb_read_byte(void) {
-  for (;;) {
-    if (avrisp_ep_out_owned &&
-        (avrisp_ep_out_position < avrisp_ep_out_length)) {
-      avrisp_bytes_read++;
-      return avrisp_usb_out_buffer[avrisp_ep_out_position++];
-    }
-
-    avrisp_usb_release_packet();
-
-    if (!avrisp_usb_wait_packet()) {
-      return 0xFF;
-    }
-
-    if (avrisp_ep_out_length == 0) {
-      /* Stray zero-length packet: drop it and keep waiting. */
-      avrisp_usb_release_packet();
-    }
-  }
-}
-
-static bool avrisp_usb_send_packet(const uint16_t length) {
+static bool avrisp_usb_wait_in(void) {
   while (avrisp_ep_in->BDSTAT & UOWN) {
-    if (!avrisp_timeout_ticks) {
+    if (!avrisp_timeout_ticks || usb_device_state < CONFIGURED_STATE) {
       return false;
     }
   }
+  return usb_device_state >= CONFIGURED_STATE;
+}
+
+static bool avrisp_usb_send_packet(const uint16_t position,
+                                  const uint16_t length) {
+  if (!avrisp_usb_wait_in()) {
+    return false;
+  }
+
+  /* The SIE owns both the descriptor AND its buffer until UOWN clears. */
+  memcpy(avrisp_usb_in_buffer, &avrisp_response_buffer[position], length);
 
   avrisp_ep_in->BDCNT = length;
   avrisp_ep_in->BDSTAT = ((avrisp_ep_in->BDSTAT ^ DTS) & DTS) | (UOWN + DTSEN);
@@ -271,92 +258,81 @@ static void avrisp_usb_flush_response(void) {
   uint16_t position = 0;
 
   while ((length - position) >= AVRISP_USB_PACKET_SIZE) {
-    memcpy(avrisp_usb_in_buffer, &avrisp_response_buffer[position],
-           AVRISP_USB_PACKET_SIZE);
-    if (!avrisp_usb_send_packet(AVRISP_USB_PACKET_SIZE)) {
+    if (!avrisp_usb_send_packet(position, AVRISP_USB_PACKET_SIZE)) {
       return;
     }
     position += AVRISP_USB_PACKET_SIZE;
   }
 
   if (length > position) {
-    memcpy(avrisp_usb_in_buffer, &avrisp_response_buffer[position],
-           length - position);
-    if (!avrisp_usb_send_packet(length - position)) {
+    if (!avrisp_usb_send_packet(position, length - position)) {
       return;
     }
   }
 
   /* Terminate transfers that are an exact packet multiple with a ZLP. */
   if (length && ((length % AVRISP_USB_PACKET_SIZE) == 0)) {
-    (void)avrisp_usb_send_packet(0);
+    (void)avrisp_usb_send_packet(0, 0);
   }
 
+  (void)avrisp_usb_wait_in();
   avrisp_response_length = 0;
 }
 
-static void avrisp_usb_response_begin(void) {
-  if ((avrisp_bytes_read % AVRISP_USB_PACKET_SIZE) == 0) {
-    /* The host terminates exact-multiple transfers with a zero-length
-       packet; consume it before the next command starts.  If the next
-       packet is not empty it is kept for the next command. */
-    avrisp_usb_release_packet();
-    if (avrisp_usb_wait_packet() && (avrisp_ep_out_length == 0)) {
-      avrisp_usb_release_packet();
-    }
-  } else {
-    avrisp_usb_release_packet();
-  }
-
-  avrisp_response_length = 0;
-}
-
-static void avrisp_usb_discard_incoming(void) {
+static bool avrisp_usb_read_request(void) {
+  avrisp_request_length = 0;
+  avrisp_request_position = 0;
   for (;;) {
-    if (!avrisp_ep_out_owned) {
-      if (!avrisp_usb_wait_packet()) {
-        return;
-      }
+    if (!avrisp_usb_wait_packet()) {
+      return false;
     }
-
     uint16_t length = avrisp_ep_out_length;
+    if (length > AVRISP_USB_PACKET_SIZE) {
+      return false;
+    }
+    if (avrisp_request_length + length <= AVRISP_BUFFER_SIZE) {
+      memcpy(&avrisp_command_buffer[avrisp_request_length],
+             avrisp_usb_out_buffer, length);
+      avrisp_request_length += length;
+    } else {
+      /* Keep draining to the actual short packet/ZLP, without wrapping. */
+      avrisp_request_length = AVRISP_BUFFER_SIZE + 1;
+    }
     avrisp_usb_release_packet();
-
     if (length < AVRISP_USB_PACKET_SIZE) {
-      return;
+      return true;
     }
   }
 }
 
 static void avrisp_usb_detach(void) {
+  DisableGlobalUsbInterrupt();
   U1CONbits.USBEN = 0;
   bp_delay_ms(AVRISP_USB_DETACH_MS);
 }
 
 static void avrisp_usb_switch_to_mkii(void) {
-  avrisp_usb_personality_active = true;
-
   avrisp_usb_detach();
+  avrisp_usb_personality_active = true;
   usb_init(avrisp_device_descriptor, avrisp_config_descriptor,
            avrisp_string_descriptors, AVRISP_NUM_STRINGS);
   usb_start();
+  EnableUsbGlobalInterrupt();
 }
 
 static void avrisp_usb_switch_to_cdc(void) {
-  avrisp_usb_personality_active = false;
-
   avrisp_usb_detach();
-  initCDC();
+  avrisp_usb_personality_active = false;
   usb_init(cdc_device_descriptor, cdc_config_descriptor, cdc_str_descs,
-           AVRISP_CDC_NUM_STRINGS);
+            AVRISP_CDC_NUM_STRINGS);
+  initCDC();
   usb_register_sof_handler(CDCFlushOnTimeout);
   usb_start();
+  EnableUsbGlobalInterrupt();
 }
 
 static void avrisp_usb_run(void) {
-  bp_write_line("AVRISP-MKII mode - re-enumerating as an AVRISP mkII");
-  user_serial_wait_transmission_done();
-
+  /* Do not wait for CDC IN: the caller may already have closed its COM port. */
   avrisp_usb_switch_to_mkii();
 
   /* Wait for the host to configure the mkII personality. */
@@ -371,14 +347,11 @@ static void avrisp_usb_run(void) {
     /* Host activity: rearm the idle watchdog and start the command one. */
     avrisp_activity_ticks = AVRISP_IDLE_TICKS;
     avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
-    avrisp_bytes_read = 0;
 
-    avrisp_ep_out_owned = true;
-    avrisp_ep_out_length = avrisp_ep_out->BDCNT;
-    avrisp_ep_out_position = 0;
-
-    if (avrisp_ep_out_length == 0) {
-      avrisp_usb_release_packet();
+    if (!avrisp_usb_read_request()) {
+      break;
+    }
+    if (avrisp_request_length == 0) {
       continue;
     }
 
@@ -406,18 +379,48 @@ static void avrisp_usb_run(void) {
 
 /** Sequence number of the frame being processed. */
 static uint8_t avrisp_serial_sequence;
+static bool avrisp_serial_rx_error;
 
-/** Position of the frame payload within the command buffer. */
-static uint16_t avrisp_serial_frame_length;
-static uint16_t avrisp_serial_frame_position;
-
-static uint8_t avrisp_serial_read_byte(void) {
-  if (avrisp_serial_frame_position < avrisp_serial_frame_length) {
-    avrisp_bytes_read++;
-    return avrisp_command_buffer[avrisp_serial_frame_position++];
+static bool avrisp_serial_poll_byte(uint8_t *byte) {
+#ifdef BUSPIRATEV4
+  /* getc_cdc() can block forever after an otherwise harmless ZLP. */
+  return poll_getc_cdc(byte) != 0;
+#else
+  if (user_serial_check_overflow()) {
+    user_serial_clear_overflow();
+    while (user_serial_ready_to_read()) {
+      (void)user_serial_read_byte();
+    }
+    avrisp_serial_rx_error = true;
+    return false;
   }
+  if (!user_serial_ready_to_read()) {
+    return false;
+  }
+  *byte = user_serial_read_byte();
+  return true;
+#endif
+}
 
-  return 0xFF;
+static bool avrisp_serial_write_byte(const uint8_t byte) {
+#ifdef BUSPIRATEV4
+  while (!getInReady() && avrisp_timeout_ticks &&
+         usb_device_state >= CONFIGURED_STATE) {
+  }
+  if (usb_device_state >= CONFIGURED_STATE && avrisp_timeout_ticks) {
+    putc_cdc(byte);
+    return true;
+  }
+#else
+  while (U1STAbits.UTXBF && avrisp_timeout_ticks) {
+  }
+  if (avrisp_timeout_ticks) {
+    U1TXREG = byte;
+    return true;
+  }
+#endif
+  avrisp_activity_ticks = 0;
+  return false;
 }
 
 static void avrisp_serial_transmit_response(void) {
@@ -426,32 +429,41 @@ static void avrisp_serial_transmit_response(void) {
                      (uint8_t)(avrisp_response_length >> 8) ^
                      (uint8_t)avrisp_response_length ^ AVRISP_SERIAL_TOKEN;
 
-  user_serial_transmit_character(AVRISP_SERIAL_MESSAGE_START);
-  user_serial_transmit_character(avrisp_serial_sequence);
-  user_serial_transmit_character((uint8_t)(avrisp_response_length >> 8));
-  user_serial_transmit_character((uint8_t)avrisp_response_length);
-  user_serial_transmit_character(AVRISP_SERIAL_TOKEN);
+  if (!avrisp_serial_write_byte(AVRISP_SERIAL_MESSAGE_START) ||
+      !avrisp_serial_write_byte(avrisp_serial_sequence) ||
+      !avrisp_serial_write_byte((uint8_t)(avrisp_response_length >> 8)) ||
+      !avrisp_serial_write_byte((uint8_t)avrisp_response_length) ||
+      !avrisp_serial_write_byte(AVRISP_SERIAL_TOKEN)) {
+    return;
+  }
 
   for (index = 0; index < avrisp_response_length; index++) {
-    user_serial_transmit_character(avrisp_response_buffer[index]);
+    if (!avrisp_serial_write_byte(avrisp_response_buffer[index])) {
+      return;
+    }
     checksum ^= avrisp_response_buffer[index];
   }
 
-  user_serial_transmit_character(checksum);
+  (void)avrisp_serial_write_byte(checksum);
   avrisp_response_length = 0;
 }
 
 /** Waits up to 50 ms for a frame byte. */
 static bool avrisp_serial_read_frame_byte(uint8_t *byte) {
-  uint8_t retries = 50;
-
-  while (retries--) {
-    if (user_serial_ready_to_read()) {
-      *byte = user_serial_read_byte();
+  uint8_t start = avrisp_timeout_ticks;
+  while (avrisp_timeout_ticks && avrisp_activity_ticks &&
+         (uint8_t)(start - avrisp_timeout_ticks) < 5) {
+    if (avrisp_serial_poll_byte(byte)) {
       return true;
     }
-
+    if (avrisp_serial_rx_error) {
+      return false;
+    }
+#ifdef BUSPIRATEV4
     bp_delay_ms(1);
+#endif
+    /* v3 must busy-poll: a 1 ms sleep overflows its four-byte UART FIFO
+       at 115200 baud (one character every 87 us). */
   }
 
   return false;
@@ -472,17 +484,21 @@ static void avrisp_serial_run(void) {
       break;
     }
 
-    if (!user_serial_ready_to_read()) {
+    avrisp_serial_rx_error = false;
+    if (!avrisp_serial_poll_byte(&byte)) {
+#ifdef BUSPIRATEV4
       bp_delay_ms(1);
+#endif
       continue;
     }
 
-    byte = user_serial_read_byte();
     avrisp_activity_ticks = AVRISP_IDLE_TICKS;
 
     if (byte != AVRISP_SERIAL_MESSAGE_START) {
       continue;
     }
+
+    avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
 
     if (!avrisp_serial_read_frame_byte(&sequence) ||
         !avrisp_serial_read_frame_byte(&size_high) ||
@@ -542,9 +558,8 @@ static void avrisp_serial_run(void) {
 
     /* Dispatch the frame; leftover bytes are dropped with the frame. */
     avrisp_serial_sequence = sequence;
-    avrisp_serial_frame_length = length;
-    avrisp_serial_frame_position = 0;
-    avrisp_bytes_read = 0;
+    avrisp_request_length = length;
+    avrisp_request_position = 0;
     avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
 
     avrisp_v2_process_command();
@@ -564,12 +579,15 @@ bool avrisp_is_usb(void) {
 }
 
 uint8_t avrisp_read_byte(void) {
-#ifdef BUSPIRATEV4
-  if (avrisp_transport == AVRISP_TRANSPORT_USB) {
-    return avrisp_usb_read_byte();
+  if (avrisp_request_position < avrisp_request_length &&
+      avrisp_request_position < AVRISP_BUFFER_SIZE) {
+    return avrisp_command_buffer[avrisp_request_position++];
   }
-#endif
-  return avrisp_serial_read_byte();
+  return 0xFF;
+}
+
+uint16_t avrisp_request_size(void) {
+  return avrisp_request_length;
 }
 
 void avrisp_write_byte(const uint8_t value) {
@@ -579,16 +597,14 @@ void avrisp_write_byte(const uint8_t value) {
 }
 
 void avrisp_response_begin(void) {
-#ifdef BUSPIRATEV4
-  if (avrisp_transport == AVRISP_TRANSPORT_USB) {
-    avrisp_usb_response_begin();
-    return;
-  }
-#endif
   avrisp_response_length = 0;
 }
 
 void avrisp_response_end(void) {
+  /* A target timeout must still be reportable to the host. */
+  avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
+  avrisp_activity_ticks = AVRISP_IDLE_TICKS;
+  avrisp_xprog_resume_clock();
 #ifdef BUSPIRATEV4
   if (avrisp_transport == AVRISP_TRANSPORT_USB) {
     avrisp_usb_flush_response();
@@ -599,11 +615,7 @@ void avrisp_response_end(void) {
 }
 
 void avrisp_discard_incoming(void) {
-#ifdef BUSPIRATEV4
-  if (avrisp_transport == AVRISP_TRANSPORT_USB) {
-    avrisp_usb_discard_incoming();
-  }
-#endif
+  avrisp_request_position = avrisp_request_length;
 }
 
 /* -------------------------------------------------------------------------
@@ -611,11 +623,20 @@ void avrisp_discard_incoming(void) {
  * ------------------------------------------------------------------------- */
 
 void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
+  uint16_t saved_nesting = INTCON1bits.NSTDIS;
+  /* v4 normally disables nesting; the priority-6 idle clock must be able
+     to preempt USB servicing to satisfy PDI's inactivity limit. */
+  INTCON1bits.NSTDIS = 0;
   avrisp_transport = transport;
-  avrisp_bytes_read = 0;
   avrisp_response_length = 0;
   avrisp_timeout_ticks = 0;
   avrisp_activity_ticks = AVRISP_IDLE_TICKS;
+
+#ifdef BUSPIRATEV3
+  uint16_t saved_baud = U1BRG;
+  user_serial_wait_transmission_done();
+  U1BRG = 34; /* FCY / (4 * 115200) - 1, BRGH=1: 114286 baud. */
+#endif
 
   avrisp_v2_initialise();
   avrisp_isp_initialise();
@@ -630,9 +651,14 @@ void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
     avrisp_serial_run();
   }
 
-  avrisp_timer_stop();
-  avrisp_isp_shutdown();
   avrisp_xprog_shutdown();
+  avrisp_isp_shutdown();
+  avrisp_timer_stop();
+  INTCON1bits.NSTDIS = saved_nesting;
+#ifdef BUSPIRATEV3
+  user_serial_wait_transmission_done();
+  U1BRG = saved_baud;
+#endif
 }
 
 #endif /* BP_ENABLE_AVRISP_MKII_SUPPORT */

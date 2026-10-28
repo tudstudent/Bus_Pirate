@@ -36,6 +36,7 @@
 #define XPROG_ERASE_BOOT_PAGE                6
 #define XPROG_ERASE_EEPROM_PAGE              7
 #define XPROG_ERASE_USERSIG                  8
+#define XPROG_ERASE_CONFIG                   9
 
 #define XPROG_MEM_WRITE_ERASE                0
 #define XPROG_MEM_WRITE_WRITE                1
@@ -118,6 +119,8 @@ extern uint8_t  avrisp_xprog_selected_protocol;
 /* Physical layer (avrisp_xprog.c). */
 void    avrisp_xprog_initialise(void);
 void    avrisp_xprog_shutdown(void);
+void    avrisp_xprog_pause_clock(void);
+void    avrisp_xprog_resume_clock(void);
 void    avrisp_xprog_enable_target_pdi(void);
 void    avrisp_xprog_enable_target_tpi(void);
 void    avrisp_xprog_disable_target_pdi(void);
@@ -160,7 +163,7 @@ void    avrisp_xprog_send_idle(void);
 #define XMEGA_NVM_CMD_WRITEBOOTSECPAGE       0x2C
 #define XMEGA_NVM_CMD_ERASEWRITEBOOTSECPAGE  0x2D
 #define XMEGA_NVM_CMD_BOOTCRC                0x39
-#define XMEGA_NVM_CMD_READUSERSIG            0x03
+#define XMEGA_NVM_CMD_READUSERSIG            0x01
 #define XMEGA_NVM_CMD_ERASEUSERSIG           0x18
 #define XMEGA_NVM_CMD_WRITEUSERSIG           0x1A
 #define XMEGA_NVM_CMD_READCALIBRATION        0x02

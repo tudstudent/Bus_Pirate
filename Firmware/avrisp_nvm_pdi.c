@@ -30,7 +30,7 @@ static void avrisp_xmega_send_address(const uint32_t address) {
 
 /** Sends an NVM register address, offset from the configured NVM base. */
 static void avrisp_xmega_send_nvm_reg_address(const uint8_t reg) {
-  avrisp_xmega_send_address(avrisp_xprog_nvm_base | reg);
+  avrisp_xmega_send_address(avrisp_xprog_nvm_base + reg);
 }
 
 bool avrisp_xmega_wait_nvm_bus(void) {
@@ -153,6 +153,9 @@ bool avrisp_xmega_get_crc(const uint8_t crc_command, uint32_t *const crc) {
 
 bool avrisp_xmega_read_memory(const uint32_t address, uint8_t *buffer,
                               uint16_t size) {
+  if (!size) {
+    return true;
+  }
   if (!avrisp_xmega_wait_nvm_controller()) {
     return false;
   }
@@ -200,7 +203,7 @@ bool avrisp_xmega_write_byte(const uint8_t command, const uint32_t address,
   avrisp_xmega_send_address(address);
   avrisp_xprog_send_byte(byte);
 
-  return true;
+  return avrisp_xmega_wait_nvm_controller();
 }
 
 bool avrisp_xmega_write_page(const uint8_t buffer_command,
@@ -244,7 +247,7 @@ bool avrisp_xmega_write_page(const uint8_t buffer_command,
     avrisp_xprog_send_byte(
         PDI_CMD_ST(PDI_POINTER_INDIRECT_PI, PDI_DATASIZE_1BYTE));
 
-    while (size--) {
+    while (size-- && avrisp_timeout_ticks) {
       avrisp_xprog_send_byte(*(buffer++));
     }
   }
@@ -265,7 +268,7 @@ bool avrisp_xmega_write_page(const uint8_t buffer_command,
     avrisp_xprog_send_byte(0x00);
   }
 
-  return true;
+  return avrisp_timeout_ticks && avrisp_xmega_wait_nvm_controller();
 }
 
 bool avrisp_xmega_erase_memory(const uint8_t erase_command,
@@ -314,7 +317,8 @@ bool avrisp_xmega_erase_memory(const uint8_t erase_command,
     avrisp_xprog_send_byte(
         PDI_CMD_ST(PDI_POINTER_INDIRECT_PI, PDI_DATASIZE_1BYTE));
 
-    for (uint8_t page_byte = 0; page_byte < avrisp_xprog_eeprom_page_size;
+    for (uint16_t page_byte = 0; page_byte < avrisp_xprog_eeprom_page_size &&
+                                 avrisp_timeout_ticks;
          page_byte++) {
       avrisp_xprog_send_byte(0x00);
     }

@@ -18,11 +18,24 @@
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
+/* Use latches for writes: PORT read/modify/write can corrupt adjacent pins. */
+#ifdef BUSPIRATEV4
+#define AVRISP_CLK_LAT  LATDbits.LATD2
+#define AVRISP_MOSI_LAT LATDbits.LATD1
+#define AVRISP_CS_LAT   LATDbits.LATD4
+#define AVRISP_AUX_LAT  LATDbits.LATD5
+#else
+#define AVRISP_CLK_LAT  LATBbits.LATB8
+#define AVRISP_MOSI_LAT LATBbits.LATB9
+#define AVRISP_CS_LAT   LATBbits.LATB6
+#define AVRISP_AUX_LAT  LATBbits.LATB10
+#endif
+
 /**
  * Maximum number of bytes held for a command request payload or a
  * response.  The largest request is a 256 byte page write plus its
  * header (266 bytes); the largest response is a 256 byte memory read
- * (260 bytes).
+ * (259 bytes).
  */
 #define AVRISP_BUFFER_SIZE 288
 
@@ -50,7 +63,7 @@ extern volatile uint8_t avrisp_timeout_ticks;
 #ifdef BUSPIRATEV4
 
 /** True while the mkII USB personality is enumerated (see dp_usb/cdc.c). */
-extern bool avrisp_usb_personality_active;
+extern volatile bool avrisp_usb_personality_active;
 
 /** Arms the bulk endpoint 2 pair for the mkII personality. */
 void avrisp_usb_configure_endpoints(void);
@@ -69,10 +82,13 @@ bool avrisp_is_usb(void);
 /** Reads the next request byte (0xFF when the watchdog expires). */
 uint8_t avrisp_read_byte(void);
 
+/** Complete request length, including command bytes, before dispatch. */
+uint16_t avrisp_request_size(void);
+
 /** Appends a byte to the response being built. */
 void avrisp_write_byte(uint8_t value);
 
-/** Starts a response; also consumes the host's transfer-terminating ZLP. */
+/** Starts a response (the complete request, including its ZLP, is buffered). */
 void avrisp_response_begin(void);
 
 /** Sends the completed response, terminating the transfer. */
