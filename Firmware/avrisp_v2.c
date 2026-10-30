@@ -276,7 +276,7 @@ static bool avrisp_v2_valid_request(const uint8_t command) {
       expected = 2;
       break;
     case XPROG_CMD_ERASE:
-      expected = 8;
+      expected = 7;
       break;
     case XPROG_CMD_WRITE_MEM:
       if (size < 10) {

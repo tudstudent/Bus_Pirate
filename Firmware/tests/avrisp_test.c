@@ -137,6 +137,9 @@ static void reset_test(void) {
   avrisp_xprog_initialise();
   avrisp_isp_hardware_spi = true;
 }
+/* Let GCC reject fixture lengths that overread their actual byte arrays. */
+static void request(const uint8_t *p, unsigned n)
+    __attribute__((access(read_only, 1, 2)));
 static void request(const uint8_t *p, unsigned n) {
   out_len = n; out_pos = in_len = packet_count = 0;
   out_zlp = n && !(n % 64);
@@ -193,7 +196,7 @@ int main(void) {
     mock_zero_packets=mode == 1;
     mock_restart_at=mode == 2 ? 10 : 0;
     avrisp_usb_run();
-    CHECK(mock_run_polls == (mode == 2 ? 10u :
+  CHECK(mock_run_polls == (mode == 2 ? 10u :
           AVRISP_IDLE_TICKS - AVRISP_USB_DETACH_MS / 10));
     CHECK(!avrisp_usb_personality_active && usb_device_state == CONFIGURED_STATE);
   }
@@ -299,7 +302,7 @@ int main(void) {
   request((uint8_t[]){0x50,7,2,1,0},5);
   CHECK(avrisp_xprog_eeprom_page_size == 256);
   wire_len=0;
-  request((uint8_t[]){0x50,3,4,0,0x8c,0,0},8);
+  request((uint8_t[]){0x50,3,4,0,0x8c,0,0},7);
   reply((uint8_t[]){0x50,3,0},3);
   uint8_t tagged[259] = {0xa0,0xff,0x64};
   CHECK(contains(tagged,sizeof(tagged))); /* REPEAT 255 + all 256 tags */
@@ -315,7 +318,7 @@ int main(void) {
   reply((uint8_t[]){0x50,4,1},3);
 
   wire_len=phy_pos=0;
-  request((uint8_t[]){0x50,3,2,0,0x80,0x10,0},8);
+  request((uint8_t[]){0x50,3,2,0,0x80,0x10,0},7);
   reply((uint8_t[]){0x50,3,0},3);
   /* AU Table 33-5 and LUFA specify a PDI-write trigger for APP/BOOT erase. */
   CHECK(contains((uint8_t[]){0x4c,0,0x10,0x80,0,0},6));
@@ -375,11 +378,11 @@ int main(void) {
     {2,0x98,6}, {3,0x98}, {6,0,0,0,0}, {0x10,0,0,0,1,0,0,0,0,0,0,0},
     {0x11,0,0}, {0x12,0,0,0,0,0,0}, {0x14,0,1,0x20},
     {0x17,0,0,0,0}, {0x18,1,0,0,0,0}, {0x1d,1,0,0,0},
-    {0x51,0}, {0x50,1}, {0x50,3,1,0,0,0,0,0},
+    {0x51,0}, {0x50,1}, {0x50,3,1,0,0,0,0},
     {0x50,4,1,0,0,0,0,0,0,1,0xff}, {0x50,5,1,0,0,0,0,0,1},
     {0x50,6,1}, {0x50,7,1,1,0,1,0xc0}
   };
-  static const unsigned lengths[] = {3,2,5,12,3,7,4,5,6,5,2,2,8,11,9,3,7};
+  static const unsigned lengths[] = {3,2,5,12,3,7,4,5,6,5,2,2,7,11,9,3,7};
   for (unsigned i=0; i<sizeof(lengths)/sizeof(*lengths); i++) {
     for (unsigned n=1; n<lengths[i]; n++) {
       reset_test();
