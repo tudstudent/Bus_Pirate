@@ -16,10 +16,6 @@
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
-/** NVM enable key, sent backwards after the KEY command (LUFA parity). */
-static const uint8_t avrisp_xmega_nvm_enable_key[] = {
-    0x12, 0x89, 0xAB, 0x45, 0xCD, 0xD8, 0x88, 0xFF};
-
 /** Sends the given 32-bit absolute address, LSB first. */
 static void avrisp_xmega_send_address(const uint32_t address) {
   avrisp_xprog_send_byte(address & 0xFF);
@@ -34,19 +30,8 @@ static void avrisp_xmega_send_nvm_reg_address(const uint8_t reg) {
 }
 
 bool avrisp_xmega_wait_nvm_bus(void) {
-  for (;;) {
-    avrisp_xprog_send_byte(PDI_CMD_LDCS(PDI_REG_STATUS));
-
-    uint8_t status = avrisp_xprog_receive_byte();
-
-    if (!avrisp_timeout_ticks) {
-      return false;
-    }
-
-    if (status & PDI_STATUS_NVM) {
-      return true;
-    }
-  }
+  return avrisp_xprog_wait_status(PDI_CMD_LDCS(PDI_REG_STATUS),
+                                 PDI_STATUS_NVM, PDI_STATUS_NVM);
 }
 
 bool avrisp_xmega_wait_nvm_controller(void) {
@@ -54,20 +39,8 @@ bool avrisp_xmega_wait_nvm_controller(void) {
   avrisp_xprog_send_byte(PDI_CMD_ST(PDI_POINTER_DIRECT, PDI_DATASIZE_4BYTES));
   avrisp_xmega_send_nvm_reg_address(XMEGA_NVM_REG_STATUS);
 
-  for (;;) {
-    avrisp_xprog_send_byte(
-        PDI_CMD_LD(PDI_POINTER_INDIRECT, PDI_DATASIZE_1BYTE));
-
-    uint8_t status = avrisp_xprog_receive_byte();
-
-    if (!avrisp_timeout_ticks) {
-      return false;
-    }
-
-    if (!(status & (1 << 7))) {
-      return true;
-    }
-  }
+  return avrisp_xprog_wait_status(
+      PDI_CMD_LD(PDI_POINTER_INDIRECT, PDI_DATASIZE_1BYTE), 1 << 7, 0);
 }
 
 bool avrisp_xmega_enable_pdi(void) {
@@ -82,12 +55,7 @@ bool avrisp_xmega_enable_pdi(void) {
   avrisp_xprog_send_byte(0x02);
 
   /* Send the NVM enable key. */
-  avrisp_xprog_send_byte(PDI_CMD_KEY);
-
-  for (uint8_t index = sizeof(avrisp_xmega_nvm_enable_key); index > 0;
-       index--) {
-    avrisp_xprog_send_byte(avrisp_xmega_nvm_enable_key[index - 1]);
-  }
+  avrisp_xprog_send_nvm_key(PDI_CMD_KEY);
 
   return avrisp_xmega_wait_nvm_bus();
 }

@@ -199,6 +199,28 @@ void avrisp_xprog_send_idle(void) {
  * Target interface management.
  * ------------------------------------------------------------------------- */
 
+void avrisp_xprog_send_nvm_key(uint8_t instruction) {
+  static const uint8_t key[] = {0x12, 0x89, 0xAB, 0x45, 0xCD, 0xD8, 0x88, 0xFF};
+  avrisp_xprog_send_byte(instruction);
+  for (uint8_t index = sizeof(key); index > 0; index--) {
+    avrisp_xprog_send_byte(key[index - 1]);
+  }
+}
+
+bool avrisp_xprog_wait_status(uint8_t instruction, uint8_t mask,
+                             uint8_t ready_value) {
+  for (;;) {
+    avrisp_xprog_send_byte(instruction);
+    uint8_t status = avrisp_xprog_receive_byte();
+    if (!avrisp_timeout_ticks) {
+      return false;
+    }
+    if ((status & mask) == ready_value) {
+      return true;
+    }
+  }
+}
+
 void avrisp_xprog_initialise(void) {
   IEC1bits.T4IE = 0;
   T4CON = 0;

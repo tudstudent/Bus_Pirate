@@ -127,6 +127,11 @@ void    avrisp_xprog_disable_target_pdi(void);
 void    avrisp_xprog_disable_target_tpi(void);
 void    avrisp_xprog_send_byte(const uint8_t byte);
 uint8_t avrisp_xprog_receive_byte(void);
+
+/** Common PDI/TPI NVM key and timeout-aware status polling transactions. */
+void avrisp_xprog_send_nvm_key(uint8_t instruction);
+bool avrisp_xprog_wait_status(uint8_t instruction, uint8_t mask,
+                             uint8_t ready_value);
 void    avrisp_xprog_send_idle(void);
 
 /* XMEGA NVM register/command constants (LUFA XMEGANVM.h). */

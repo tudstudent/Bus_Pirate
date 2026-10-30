@@ -235,12 +235,40 @@ static void test_isp_first_contact(void) {
   CHECK(spi_len == 0 && BP_AUX0_DIR == INPUT);
   reset_test();
 }
+
+static void test_shared_nvm_transactions(void) {
+  static const uint8_t key[] = {0xff,0x88,0xd8,0xcd,0x45,0xab,0x89,0x12};
+  for (unsigned protocol=0; protocol<2; protocol++) {
+    reset_test();
+    avrisp_xprog_selected_protocol = protocol ? XPROG_PROTOCOL_TPI : XPROG_PROTOCOL_PDI;
+    uint8_t instruction = protocol ? TPI_CMD_SKEY : PDI_CMD_KEY;
+    avrisp_xprog_send_nvm_key(instruction);
+    CHECK(wire_len == 9 && wire[0] == instruction);
+    CHECK(!memcmp(wire+1,key,sizeof(key)));
+
+    reset_test();
+    avrisp_xprog_selected_protocol = protocol ? XPROG_PROTOCOL_TPI : XPROG_PROTOCOL_PDI;
+    memcpy(phy_rx,(uint8_t[]){0,1,2},3); phy_len=3;
+    CHECK(avrisp_xprog_wait_status(0x80,2,2));
+    CHECK(phy_pos == 3 && wire_len == 3);
+    CHECK(wire[0] == 0x80 && wire[1] == 0x80 && wire[2] == 0x80);
+
+    reset_test();
+    memcpy(phy_rx,(uint8_t[]){0x80,0},2); phy_len=2;
+    CHECK(avrisp_xprog_wait_status(0x82,0x80,0));
+    CHECK(phy_pos == 2 && wire_len == 2);
+    avrisp_timeout_ticks=0;
+    CHECK(!avrisp_xprog_wait_status(0x80,2,2));
+  }
+  reset_test();
+}
 int main(void) {
   uint8_t p[400] = {CMD_SIGN_ON};
   (void)mock_usb_configure;
   (void)CDCFlushOnTimeout;
   (void)usb_register_sof_handler;
   test_isp_first_contact();
+  test_shared_nvm_transactions();
   reset_test();
   mock_enumerating=true;
   mock_attach_attempts=mock_fail_configurations=0;
