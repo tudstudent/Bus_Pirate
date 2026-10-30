@@ -18,6 +18,7 @@ static uint8_t phy_rx[1024];
 static unsigned phy_len, phy_pos;
 static bool bad_parity, bad_stop;
 static bool blocked_cdc;
+static bool mock_require_idle_clock;
 static bool mock_zero_packets;
 static unsigned mock_run_polls, mock_restart_at;
 static uint8_t serial_rx[2048], serial_tx[2048];
@@ -43,6 +44,9 @@ static void user_serial_transmit_character(uint8_t b) {
 static unsigned getInReady(void) {
   if (blocked_cdc) bp_delay_ms(1);
   return !blocked_cdc;
+}
+static void mock_response_append(void) {
+  if (mock_require_idle_clock) CHECK(IEC1bits.T4IE);
 }
 static void mock_usb_configure(void) {
   if (usb_device_state >= CONFIGURED_STATE) return;
@@ -327,6 +331,10 @@ int main(void) {
   reset_test();
   request((uint8_t[]){0x50,1},2);
   reply((uint8_t[]){0x50,1,0},3);
+  mock_require_idle_clock=true;
+  request((uint8_t[]){0x50,5,1,0,0x80,0,0,1,0},9);
+  CHECK(in_len == 259 && usb_reply[2] == 0);
+  mock_require_idle_clock=false;
   CHECK(IEC1bits.T4IE && PR4 == 639);
   _T4Interrupt();
   CHECK(AVRISP_CLK_LAT == HIGH);
