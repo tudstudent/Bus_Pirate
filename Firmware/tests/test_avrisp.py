@@ -1,7 +1,7 @@
 """Native, hardware-free regression tests of the actual AVRISP C sources.
 
 Run with Python 3 and an existing GCC on PATH. Generated files stay in build/.
-Mocks complete DMA transactions at polling points and supply SPI/USRT data;
+Mocks complete DMA transactions at polling points and supply SPI/serial data;
 they do not emulate PIC24 timing, USB enumeration, or electrical behavior.
 """
 from pathlib import Path
@@ -42,10 +42,3 @@ subprocess.run(["gcc", "-std=gnu99", "-O1", "-Wall", "-Wextra",
                 "-Werror", "-I", str(OUT), str(OUT / "test.c"), "-o", str(exe)],
                check=True)
 subprocess.run([str(exe)], check=True)
-shutil.copyfile(ROOT / "tests" / "avrisp_serial_v3_test.c", OUT / "serial_v3.c")
-v3exe = OUT / "serial_v3.exe"
-subprocess.run(["gcc", "-std=gnu99", "-O1", "-Wall", "-Wextra", "-Werror",
-                "-Wno-unused-function", "-Wno-unused-variable", "-DAVRISP_NATIVE_V3",
-                "-I", str(OUT), str(OUT / "serial_v3.c"), "-o", str(v3exe)],
-               check=True)
-subprocess.run([str(v3exe)], check=True)

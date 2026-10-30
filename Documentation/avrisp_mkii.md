@@ -1,7 +1,7 @@
 AVRISP-MKII programmer
 ======================
 
-The Bus Pirate firmware contains an AVRISP-MKII compatible programmer
+The Bus Pirate v4 firmware contains an AVRISP-MKII compatible programmer
 personality for programming AVR microcontrollers over ISP, PDI (XMEGA)
 and TPI (TINY) interfaces.  The protocol engine is a port of
 [LUFA's AVRISP-MKII project](https://www.lufa-lib.org) (Copyright (C)
@@ -16,8 +16,8 @@ least 20 times until `BBIO1` appears, then send the command byte).
   Pirate as a vendor-class device with Atmel's AVRISP mkII VID/PID
   (03EB:2104), speaking the raw STK500v2/XPROG command set over bulk
   endpoint 2.  Use `avrdude -c avrispmkII -P usb`.
-- **`0x09` - AVRISP-MKII over serial** (BPv3 and BPv4): serves the
-  framed STK500v2 (AVR068) protocol over the normal serial port.  Use
+- **`0x09` - AVRISP-MKII over CDC serial** (BPv4 only): serves the
+  framed STK500v2 (AVR068) protocol over the normal USB serial port. Use
   `avrdude -c stk500v2 -P COMx`.  Because of a host-side limitation in
   avrdude (it only enables the XPROG PDI/TPI protocol for mkII-class
   programmers), this route provides **ISP programming only**; PDI and
@@ -68,20 +68,21 @@ If the host disables the USB port or refuses enumeration, firmware cannot
 force Windows to expose a COM port, but recovery does not require a
 Bus Pirate power cycle once normal host enumeration resumes.
 
-## Use with avrdude (serial route, BPv3/BPv4)
+## Use with avrdude (CDC serial route, BPv4)
 
-1. Enter binary bitbang mode (BPv3: over the FT232 serial port, which
-   the mode re-configures for 115200 bps; BPv4: over the USB serial
-   port), and send `0x09`.
+1. Enter binary bitbang mode over the BPv4 USB serial port and send `0x09`.
 2. Close the terminal and run, for example:
 
 ```
-avrdude -c stk500v2 -P COM4 -b 115200 -p <part> -U flash:w:<file>.hex
+avrdude -c stk500v2 -P COMx -p <part> -U flash:w:<file>.hex
 ```
 
 ## Wiring
 
 ISP (ATtiny/ATmega, 6-pin programming header convention):
+
+Check the exact target's programming pin map. ATmega64A uses PE0/PDI as
+MOSI input and PE1/PDO as MISO output, not its ordinary PB2/PB3 SPI pins.
 
 | programmer pin | BP pin | target pin |
 |---|---|---|
@@ -136,19 +137,21 @@ it does not install that firmware or directly program an OSCCAL fuse.
 
 ## Notes and limitations
 
-- BPv3: the personality is included in the default firmware
-  (serial ISP route only) but has not been tested on hardware; treat the
-  v3 build as build-verified only.
+- BPv3: this personality is not included or supported. Its existing
+  Bus Pirate programming interfaces are unchanged. Both programmer entry
+  commands described here require BPv4.
+- The serial route is AVR068 framing over USB CDC, not a hardware-UART
+  personality or a baud-switching mode. Host baud settings do not set an
+  electrical target clock.
 - TPI: the protocol engine is complete, but no TPI-capable target was
   available for bench verification yet.
-- **Bench status (2026-10-30):** the combined firmware is
-  **hardware-verified** — XM64/ATxmega128A3U **PDI** (signature, read,
+- **Hardware verification:** the programmer was exercised with
+  ATxmega128A3U **PDI** (signature, read,
   erase, write + verify, EEPROM, fuses, restore), **ATmega64A ISP**
   (signature, fuses, erase, write + full readback, EEPROM, fuse write),
   mkII USB entry/re-enumeration/idle-exit (incl. Windows driver bind and
-  PnP restarts) and the serial STK500v2 route.  **TPI remains
-  build-verified only** (no ATtiny target available).  Full records:
-  `WORKLOG-AVRMKII.md` §14.11–§14.13.
+  PnP restarts) and the BPv4 CDC serial STK500v2 route. **TPI remains
+  source/build/native-tested only**; no TPI target was hardware-tested.
 - Timer 3 supplies the 10 ms watchdog; Timer 4 supplies a 25 kHz idle
   PDI/TPI clock between commands. Byte transfers use software clocking
   at approximately 125 kHz. Timer 1 remains the normal delay timebase;
@@ -163,7 +166,22 @@ it does not install that firmware or directly program an OSCCAL fuse.
 - Malformed, oversized, and unknown requests receive failure/unknown
   status rather than LUFA's stall/no-reply paths. XPROG CRC preserves
   LUFA's unusual high-byte, low-byte, middle-byte reply order.
-- The historical `Firmware-Alternates/firmware-STK500v2` tree remains
-  in the repository pending the queued post-bench cleanup (now
-  unblocked — see `WORKLOG-AVRMKII.md` §15, #233); this built-in
-  personality is its intended replacement.
+- This main-firmware personality supersedes the separate STK500v2
+  alternate on BPv4. It is independent of the existing avrdude
+  `buspirate` interface, which remains available.
+
+## Hardware-free regression checks
+
+With Python 3, a host GCC, and XC16 installed, run from `Firmware`:
+
+```text
+python tests/test_avrisp.py
+python tests/test_avrisp_cdc_gate.py
+python tests/test_avrisp_board_gate.py
+```
+
+The native suite checks protocol/PHY models and CDC serial framing,
+including 266-byte payloads. The XC16 checks verify actual CDC dispatch
+and enforce BPv4 inclusion/BPv3 exclusion without injected feature flags.
+These tests do not emulate USB enumeration, MCU-cycle timing or target
+electrical behavior. Generated files remain under the ignored build tree.

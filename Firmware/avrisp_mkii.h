@@ -19,17 +19,10 @@
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
 /* Use latches for writes: PORT read/modify/write can corrupt adjacent pins. */
-#ifdef BUSPIRATEV4
 #define AVRISP_CLK_LAT  LATDbits.LATD2
 #define AVRISP_MOSI_LAT LATDbits.LATD1
 #define AVRISP_CS_LAT   LATDbits.LATD4
 #define AVRISP_AUX_LAT  LATDbits.LATD5
-#else
-#define AVRISP_CLK_LAT  LATBbits.LATB8
-#define AVRISP_MOSI_LAT LATBbits.LATB9
-#define AVRISP_CS_LAT   LATBbits.LATB6
-#define AVRISP_AUX_LAT  LATBbits.LATB10
-#endif
 
 /**
  * Maximum number of bytes held for a command request payload or a
@@ -60,7 +53,6 @@ extern uint8_t avrisp_response_buffer[AVRISP_BUFFER_SIZE];
 /** Command watchdog, decremented every 10 ms by the mode timer. */
 extern volatile uint8_t avrisp_timeout_ticks;
 
-#ifdef BUSPIRATEV4
 
 /** True while the mkII USB personality is enumerated (see dp_usb/cdc.c). */
 extern volatile bool avrisp_usb_personality_active;
@@ -68,7 +60,6 @@ extern volatile bool avrisp_usb_personality_active;
 /** Arms the bulk endpoint 2 pair for the mkII personality. */
 void avrisp_usb_configure_endpoints(void);
 
-#endif /* BUSPIRATEV4 */
 
 /**
  * Enters the AVRISP-MKII mode; returns when the host has been idle long

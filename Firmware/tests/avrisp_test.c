@@ -496,7 +496,7 @@ int main(void) {
     }
   }
 
-  /* Serial framing, identity, seq echo, XOR, bad checksum, compacted data. */
+  /* BPv4 CDC framing, identity, seq echo, XOR and compacted data. */
   reset_test();
   avrisp_transport=AVRISP_TRANSPORT_SERIAL;
   serial_len=serial_pos=serial_tx_len=0;
@@ -521,6 +521,24 @@ int main(void) {
   avrisp_timeout_ticks=AVRISP_TIMEOUT_TICKS;
   avrisp_activity_ticks=AVRISP_IDLE_TICKS;
   CHECK(!avrisp_serial_write_byte(0) && !avrisp_activity_ticks);
+  blocked_cdc=false;
+  reset_test();
+  avrisp_transport=AVRISP_TRANSPORT_SERIAL;
+  serial_len=serial_pos=serial_tx_len=0;
+  p[0]=CMD_PROGRAM_EEPROM_ISP; p[1]=1; p[2]=0; p[3]=1;
+  p[4]=0; p[5]=0xc0; p[6]=0; p[7]=0xa0; p[8]=p[9]=0xff;
+  for (unsigned i=0; i<256; i++) p[10+i]=(uint8_t)i;
+  frame(p,266,0xa0,false);
+  frame((uint8_t[]){CMD_SIGN_ON},1,0xa1,false);
+  avrisp_serial_run();
+  CHECK(serial_pos == serial_len && spi_len == 1024);
+  CHECK(serial_tx[1] == 0xa0 && serial_tx[2] == 0 && serial_tx[3] == 2);
+  CHECK(serial_tx[5] == CMD_PROGRAM_EEPROM_ISP && serial_tx[6] == 0);
+  CHECK(serial_tx_len == 25 && serial_tx[9] == 0xa1);
+  CHECK(!memcmp(serial_tx+16,"STK500_2",8));
+  xor=0;
+  for (unsigned i=0; i<8; i++) xor ^= serial_tx[i];
+  CHECK(xor == 0);
   printf("AVRISP native regression checks passed: %u\n", checks);
   return 0;
 }

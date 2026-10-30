@@ -7,9 +7,8 @@
  * Atmel AVRISP mkII compatible vendor-class device (VID/PID 03EB:2104)
  * with the protocol engine talking over bulk endpoint 2, matching
  * avrdude's AVRISP mkII transport (raw command payloads, transfers
- * terminated by a short packet or ZLP).  On both boards a serial
- * STK500v2 fallback (AVR068 framing) is available over the user serial
- * link.
+ * terminated by a short packet or ZLP). A framed STK500v2 fallback
+ * (AVR068) is available over the BPv4 USB CDC serial link.
  *
  * The protocol engine is a port of LUFA's AVRISP-MKII project
  * (Copyright (C) Dean Camera, 2021; MIT-style licence, see
@@ -23,16 +22,14 @@
 #include "avrisp_v2.h"
 #include "avrisp_xprog.h"
 
-#ifdef BUSPIRATEV4
+#ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
+
 /* The CDC descriptor arrays are defined in descriptors.h, which is
    included by main.c.  Declaring them here avoids a second definition. */
 extern ROMPTR const unsigned char cdc_device_descriptor[];
 extern ROMPTR const unsigned char cdc_config_descriptor[];
 extern ROMPTR const unsigned char cdc_str_descs[];
 #define AVRISP_CDC_NUM_STRINGS 4u
-#endif /* BUSPIRATEV4 */
-
-#ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
 /** Size of the mkII USB bulk endpoint packets. */
 #define AVRISP_USB_PACKET_SIZE 64
@@ -99,7 +96,6 @@ static void avrisp_timer_stop(void) {
  * mkII USB personality (BPv4 only).
  * ------------------------------------------------------------------------- */
 
-#ifdef BUSPIRATEV4
 
 /** True while the mkII USB personality is enumerated. */
 volatile bool avrisp_usb_personality_active;
@@ -414,7 +410,6 @@ restore_cdc:
   avrisp_usb_switch_to_cdc();
 }
 
-#endif /* BUSPIRATEV4 */
 
 /* -------------------------------------------------------------------------
  * Serial STK500v2 fallback (AVR068 framing).
@@ -430,28 +425,11 @@ static uint8_t avrisp_serial_sequence;
 static bool avrisp_serial_rx_error;
 
 static bool avrisp_serial_poll_byte(uint8_t *byte) {
-#ifdef BUSPIRATEV4
   /* getc_cdc() can block forever after an otherwise harmless ZLP. */
   return poll_getc_cdc(byte) != 0;
-#else
-  if (user_serial_check_overflow()) {
-    user_serial_clear_overflow();
-    while (user_serial_ready_to_read()) {
-      (void)user_serial_read_byte();
-    }
-    avrisp_serial_rx_error = true;
-    return false;
-  }
-  if (!user_serial_ready_to_read()) {
-    return false;
-  }
-  *byte = user_serial_read_byte();
-  return true;
-#endif
 }
 
 static bool avrisp_serial_write_byte(const uint8_t byte) {
-#ifdef BUSPIRATEV4
   while (!getInReady() && avrisp_timeout_ticks &&
          usb_device_state >= CONFIGURED_STATE) {
   }
@@ -459,14 +437,6 @@ static bool avrisp_serial_write_byte(const uint8_t byte) {
     putc_cdc(byte);
     return true;
   }
-#else
-  while (U1STAbits.UTXBF && avrisp_timeout_ticks) {
-  }
-  if (avrisp_timeout_ticks) {
-    U1TXREG = byte;
-    return true;
-  }
-#endif
   avrisp_activity_ticks = 0;
   return false;
 }
@@ -507,11 +477,7 @@ static bool avrisp_serial_read_frame_byte(uint8_t *byte) {
     if (avrisp_serial_rx_error) {
       return false;
     }
-#ifdef BUSPIRATEV4
     bp_delay_ms(1);
-#endif
-    /* v3 must busy-poll: a 1 ms sleep overflows its four-byte UART FIFO
-       at 115200 baud (one character every 87 us). */
   }
 
   return false;
@@ -534,9 +500,7 @@ static void avrisp_serial_run(void) {
 
     avrisp_serial_rx_error = false;
     if (!avrisp_serial_poll_byte(&byte)) {
-#ifdef BUSPIRATEV4
       bp_delay_ms(1);
-#endif
       continue;
     }
 
@@ -619,11 +583,7 @@ static void avrisp_serial_run(void) {
  * ------------------------------------------------------------------------- */
 
 bool avrisp_is_usb(void) {
-#ifdef BUSPIRATEV4
   return avrisp_transport == AVRISP_TRANSPORT_USB;
-#else
-  return false;
-#endif
 }
 
 uint8_t avrisp_read_byte(void) {
@@ -653,12 +613,10 @@ void avrisp_response_end(void) {
   avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
   avrisp_activity_ticks = AVRISP_IDLE_TICKS;
   avrisp_xprog_resume_clock();
-#ifdef BUSPIRATEV4
   if (avrisp_transport == AVRISP_TRANSPORT_USB) {
     avrisp_usb_flush_response();
     return;
   }
-#endif
   avrisp_serial_transmit_response();
 }
 
@@ -680,11 +638,6 @@ void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
   avrisp_timeout_ticks = 0;
   avrisp_activity_ticks = AVRISP_IDLE_TICKS;
 
-#ifdef BUSPIRATEV3
-  uint16_t saved_baud = U1BRG;
-  user_serial_wait_transmission_done();
-  U1BRG = 34; /* FCY / (4 * 115200) - 1, BRGH=1: 114286 baud. */
-#endif
 
   avrisp_v2_initialise();
   avrisp_isp_initialise();
@@ -692,9 +645,7 @@ void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
   avrisp_timer_start();
 
   if (transport == AVRISP_TRANSPORT_USB) {
-#ifdef BUSPIRATEV4
     avrisp_usb_run();
-#endif
   } else {
     avrisp_serial_run();
   }
@@ -703,10 +654,6 @@ void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
   avrisp_isp_shutdown();
   avrisp_timer_stop();
   INTCON1bits.NSTDIS = saved_nesting;
-#ifdef BUSPIRATEV3
-  user_serial_wait_transmission_done();
-  U1BRG = saved_baud;
-#endif
 }
 
 #endif /* BP_ENABLE_AVRISP_MKII_SUPPORT */

@@ -68,9 +68,9 @@ serial port.  See [avrisp_mkii.md](avrisp_mkii.md).
 ### 00001001 - Enter AVRISP-MKII mode (serial STK500v2)
 
 Serves the framed STK500v2 (AVR068) protocol on the user serial port for
-`avrdude -c stk500v2`. Works on BPv3 and BPv4; stock avrdude uses ISP
-only on this framed route. BPv3 switches to 115200 baud for the session
-(use `-b 115200`) and restores the previous baud on exit. The mode ends
+`avrdude -c stk500v2`. BPv4 only, over its normal USB CDC serial port;
+stock avrdude uses ISP only on this framed route. No hardware UART or
+baud-switching mode is involved. The mode ends
 after a period of inactivity. See [avrisp_mkii.md](avrisp_mkii.md).
 
 ### 0x0A-0x0E - Reserved for future raw protocol modes
