@@ -71,6 +71,12 @@ BIN2HEX := $(TOOLCHAIN)bin2hex
 SOURCES := \
 	1wire.c \
 	aux_pin.c \
+	avrisp_isp.c \
+	avrisp_mkii.c \
+	avrisp_nvm_pdi.c \
+	avrisp_nvm_tpi.c \
+	avrisp_v2.c \
+	avrisp_xprog.c \
 	base.c \
 	basic.c \
 	binary_io.c \
