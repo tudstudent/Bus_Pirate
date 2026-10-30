@@ -217,6 +217,8 @@ def cycle(usb, port, mode, number, prefix):
                 previous = state
             if state[0] and "mkii_present_s" not in item:
                 item["mkii_present_s"] = elapsed
+            if state[0]:
+                item["last_mkii_present_s"] = elapsed
             if "mkii_present_s" in item and not state[0] and "exit_observed_s" not in item:
                 item["exit_observed_s"] = elapsed
             if state[1] and "exit_observed_s" in item and "cdc_present_s" not in item:
@@ -335,6 +337,8 @@ def main():
     parser.add_argument("--expected-version", default="5a8eda9")
     args = parser.parse_args()
     modes = args.modes.split(",")
+    if not args.round or any(x not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for x in args.round):
+        parser.error("Round names must contain only letters, digits, underscores or hyphens")
     if set(modes) - {"silent", "hold", "signon-close", "pending-read", "avrdude", "avrdude-boot", "avrdude-flash"} or args.repeats < 1:
         parser.error("Invalid modes/repeats")
     prefix = LOGS / ("mkii_cdc_" + args.round)

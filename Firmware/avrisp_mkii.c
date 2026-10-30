@@ -52,13 +52,6 @@ volatile uint8_t avrisp_timeout_ticks;
 /** Idle watchdog, decremented every 10 ms while the mode is active. */
 static volatile uint16_t avrisp_activity_ticks;
 
-#ifdef BUSPIRATEV4
-/* Temporary bench telemetry; removed after latency classification. */
-static volatile uint16_t cdc_trace_tick;
-static uint16_t cdc_trace_idle, cdc_trace_cleanup, cdc_trace_attach;
-static uint8_t cdc_trace_attempts, cdc_trace_se0;
-#endif
-
 /** Active transport. */
 static avrisp_transport_kind_t avrisp_transport;
 
@@ -75,9 +68,6 @@ static uint16_t avrisp_request_position;
 #pragma interrupt _T3Interrupt
 
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void) {
-#ifdef BUSPIRATEV4
-  cdc_trace_tick++;
-#endif
   if (avrisp_timeout_ticks) {
     avrisp_timeout_ticks--;
   }
@@ -356,19 +346,15 @@ static bool avrisp_usb_switch_to_mkii(void) {
 }
 
 static void avrisp_usb_switch_to_cdc(void) {
-  cdc_trace_attempts = 0;
   for (;;) {
-    cdc_trace_attempts++;
     avrisp_usb_detach();
     avrisp_usb_personality_active = false;
     usb_init(cdc_device_descriptor, cdc_config_descriptor, cdc_str_descs,
               AVRISP_CDC_NUM_STRINGS);
     initCDC();
     if (!avrisp_usb_attach()) {
-      cdc_trace_se0++;
       continue;
     }
-    cdc_trace_attach = cdc_trace_tick;
 
     /* Keep BBIO away from unarmed descriptors. A failed Windows restart
        or configuration gets a fresh detach/attach, not a permanent wait. */
@@ -379,19 +365,6 @@ static void avrisp_usb_switch_to_cdc(void) {
       }
     }
     if (usb_device_state >= CONFIGURED_STATE) {
-      uint16_t ticks[4] = {cdc_trace_idle, cdc_trace_cleanup,
-                           cdc_trace_attach, cdc_trace_tick};
-      uint8_t trace[16] = {'C', 'D', 'C', 'T', 1, cdc_trace_attempts};
-      uint8_t checksum = 0;
-      for (uint8_t i = 0; i < 4; i++) {
-        trace[6 + 2 * i] = ticks[i] >> 8;
-        trace[7 + 2 * i] = ticks[i];
-      }
-      trace[14] = cdc_trace_se0;
-      for (uint8_t i = 0; i < 15; i++) checksum ^= trace[i];
-      trace[15] = checksum;
-      for (uint8_t i = 0; i < sizeof(trace); i++)
-        user_serial_transmit_character(trace[i]);
       return;
     }
   }
@@ -435,11 +408,9 @@ static void avrisp_usb_run(void) {
   }
 
 restore_cdc:
-  cdc_trace_idle = cdc_trace_tick;
   /* Release the target even if CDC recovery must retry for a while. */
   avrisp_xprog_shutdown();
   avrisp_isp_shutdown();
-  cdc_trace_cleanup = cdc_trace_tick;
   avrisp_usb_switch_to_cdc();
 }
 
@@ -718,10 +689,6 @@ void avrisp_mkii_enter(const avrisp_transport_kind_t transport) {
   avrisp_v2_initialise();
   avrisp_isp_initialise();
   avrisp_xprog_initialise();
-#ifdef BUSPIRATEV4
-  cdc_trace_tick = 0;
-  cdc_trace_se0 = 0;
-#endif
   avrisp_timer_start();
 
   if (transport == AVRISP_TRANSPORT_USB) {
