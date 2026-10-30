@@ -82,7 +82,6 @@ extern uint32_t avrisp_current_address;
 extern bool avrisp_load_extended_address;
 
 /* ISP protocol command handlers. */
-void avrisp_isp_debug_dump(void);
 void avrisp_isp_enter_mode(void);
 void avrisp_isp_leave_mode(void);
 void avrisp_isp_program_memory(const uint8_t command);
