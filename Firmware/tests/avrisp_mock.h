@@ -70,6 +70,7 @@ typedef struct {
 #define DTS 0x40
 #define DTSEN 0x08
 #define DEFAULT_STATE 0x04
+#define ATTACHED_STATE 0x01
 #define CONFIGURED_STATE 0x20
 static unsigned USB_UEP1, USB_UEP2;
 static BDentry usb_bdt[6];
@@ -79,8 +80,11 @@ static void mock_usb_out(void);
 static void mock_spi(void);
 static void mock_bit(bool drive, bool bit, bool sample);
 static void mock_usb_configure(void);
+static void mock_usb_run_poll(void);
 static bool mock_enumerating;
 static unsigned mock_configuration_polls, mock_sof_registrations;
+static bool mock_stuck_se0;
+static unsigned mock_attach_attempts, mock_fail_configurations;
 static void bp_delay_us(unsigned us);
 static void bp_delay_ms(unsigned ms);
 static bool user_serial_ready_to_read(void);
@@ -100,7 +104,18 @@ static void putc_cdc(uint8_t byte) { user_serial_transmit_character(byte); }
 static void usb_unset_in_handler(unsigned ep) { (void)ep; }
 static void usb_unset_out_handler(unsigned ep) { (void)ep; }
 static void DisableGlobalUsbInterrupt(void) {}
-static void EnableUsbGlobalInterrupt(void) {}
+static void EnableUsb(void) { mock_attach_attempts++; }
+static bool SingleEndedZeroIsSet(void) { return mock_stuck_se0; }
+static void EnableUsbGlobalInterrupt(void) {
+  if (!mock_enumerating) {
+    usb_device_state = CONFIGURED_STATE;
+#ifdef BUSPIRATEV4
+    extern volatile bool avrisp_usb_personality_active;
+    void avrisp_usb_configure_endpoints(void);
+    if (avrisp_usb_personality_active) avrisp_usb_configure_endpoints();
+#endif
+  }
+}
 static void initCDC(void) {}
 static void CDCFlushOnTimeout(void) {}
 static void usb_register_sof_handler(void (*f)(void)) {
@@ -110,8 +125,5 @@ static void usb_register_sof_handler(void (*f)(void)) {
 static void usb_init(const unsigned char *a, const unsigned char *b,
                      const unsigned char *c, unsigned n) {
   (void)a; (void)b; (void)c; (void)n;
-}
-static void usb_start(void) {
-  usb_device_state = mock_enumerating ? DEFAULT_STATE : CONFIGURED_STATE;
 }
 #endif

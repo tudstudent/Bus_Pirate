@@ -19,6 +19,7 @@ or send a letter to
 #include "../dp_usb/usb_stack_globals.h"    // USB stack only defines Not function related.
 
 #include <string.h>
+#include "../configuration.h"
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 #include "../avrisp_mkii.h"

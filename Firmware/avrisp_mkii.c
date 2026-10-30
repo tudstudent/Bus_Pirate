@@ -219,10 +219,17 @@ static void avrisp_usb_release_packet(void) {
 
 /** Waits for the next OUT packet, bounded by the command watchdog. */
 static bool avrisp_usb_wait_packet(void) {
+  if (usb_device_state < CONFIGURED_STATE) {
+    return false;
+  }
   while (avrisp_ep_out->BDSTAT & UOWN) {
     if (!avrisp_timeout_ticks || usb_device_state < CONFIGURED_STATE) {
       return false;
     }
+  }
+
+  if (usb_device_state < CONFIGURED_STATE) {
+    return false;
   }
 
   avrisp_ep_out_owned = true;
@@ -311,46 +318,77 @@ static void avrisp_usb_detach(void) {
   bp_delay_ms(AVRISP_USB_DETACH_MS);
 }
 
-static void avrisp_usb_switch_to_mkii(void) {
+/* usb_start() has an unbounded SE0 wait. Keep USB IRQs masked until the
+   line leaves reset, but allow Timer 3 to bound a host-held reset. */
+static bool avrisp_usb_attach(void) {
+  EnableUsb();
+  usb_device_state = ATTACHED_STATE;
+  avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
+  while (SingleEndedZeroIsSet()) {
+    if (!avrisp_timeout_ticks) {
+      return false;
+    }
+    bp_delay_ms(1);
+  }
+  usb_device_state = DEFAULT_STATE;
+  EnableUsbGlobalInterrupt();
+  return true;
+}
+
+static bool avrisp_usb_switch_to_mkii(void) {
   avrisp_usb_detach();
   avrisp_usb_personality_active = true;
+  avrisp_ep_out = NULL;
+  avrisp_ep_in = NULL;
   usb_init(avrisp_device_descriptor, avrisp_config_descriptor,
            avrisp_string_descriptors, AVRISP_NUM_STRINGS);
-  usb_start();
-  EnableUsbGlobalInterrupt();
+  return avrisp_usb_attach();
 }
 
 static void avrisp_usb_switch_to_cdc(void) {
-  avrisp_usb_detach();
-  avrisp_usb_personality_active = false;
-  usb_init(cdc_device_descriptor, cdc_config_descriptor, cdc_str_descs,
-            AVRISP_CDC_NUM_STRINGS);
-  initCDC();
-  usb_start();
-  EnableUsbGlobalInterrupt();
+  for (;;) {
+    avrisp_usb_detach();
+    avrisp_usb_personality_active = false;
+    usb_init(cdc_device_descriptor, cdc_config_descriptor, cdc_str_descs,
+              AVRISP_CDC_NUM_STRINGS);
+    initCDC();
+    if (!avrisp_usb_attach()) {
+      continue;
+    }
 
-  /* As at normal startup, CDC is unusable until user_configured_init()
-     arms its BDs and installs the SOF handler. Cleared UOWN bits before
-     then are not received packets: BBIO would consume stale OUT data. */
-  while (usb_device_state < CONFIGURED_STATE) {
+    /* Keep BBIO away from unarmed descriptors. A failed Windows restart
+       or configuration gets a fresh detach/attach, not a permanent wait. */
+    avrisp_activity_ticks = AVRISP_IDLE_TICKS;
+    while (usb_device_state < CONFIGURED_STATE) {
+      if (!avrisp_activity_ticks) {
+        break;
+      }
+    }
+    if (usb_device_state >= CONFIGURED_STATE) {
+      return;
+    }
   }
 }
 
 static void avrisp_usb_run(void) {
   /* Do not wait for CDC IN: the caller may already have closed its COM port. */
-  avrisp_usb_switch_to_mkii();
+  if (!avrisp_usb_switch_to_mkii()) {
+    goto restore_cdc;
+  }
 
   /* Wait for the host to configure the mkII personality. */
   while ((usb_device_state < CONFIGURED_STATE) && avrisp_activity_ticks) {
   }
 
   while ((usb_device_state >= CONFIGURED_STATE) && avrisp_activity_ticks) {
+    if (!avrisp_ep_out || !avrisp_ep_in) {
+      break;
+    }
     if (avrisp_ep_out->BDSTAT & UOWN) {
       continue;
     }
 
     /* Host activity: rearm the idle watchdog and start the command one. */
-    avrisp_activity_ticks = AVRISP_IDLE_TICKS;
     avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
 
     if (!avrisp_usb_read_request()) {
@@ -360,6 +398,7 @@ static void avrisp_usb_run(void) {
       continue;
     }
 
+    avrisp_activity_ticks = AVRISP_IDLE_TICKS;
     avrisp_v2_process_command();
 
     if (!avrisp_timeout_ticks) {
@@ -368,6 +407,10 @@ static void avrisp_usb_run(void) {
     }
   }
 
+restore_cdc:
+  /* Release the target even if CDC recovery must retry for a while. */
+  avrisp_xprog_shutdown();
+  avrisp_isp_shutdown();
   avrisp_usb_switch_to_cdc();
 }
 
