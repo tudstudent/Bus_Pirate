@@ -59,6 +59,15 @@ binary 0x00 probe; its reply must be exactly one `BBIO1`. Do not discard
 receive buffers while investigating unsolicited output: some serial
 libraries purge them automatically on open and can hide a regression.
 
+An idle WinUSB handle or empty OUT packets do not keep the programmer
+session alive. USB reset/deconfiguration aborts an active transfer; a
+host-held reset is bounded, and failed CDC configuration is retried by
+detaching/attaching CDC again. Target pins are released before CDC
+recovery, and BBIO does not use endpoints until they are configured.
+If the host disables the USB port or refuses enumeration, firmware cannot
+force Windows to expose a COM port, but recovery does not require a
+Bus Pirate power cycle once normal host enumeration resumes.
+
 ## Use with avrdude (serial route, BPv3/BPv4)
 
 1. Enter binary bitbang mode (BPv3: over the FT232 serial port, which
