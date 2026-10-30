@@ -5,11 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#ifdef AVRISP_NATIVE_V3
-#define BUSPIRATEV3
-#else
 #define BUSPIRATEV4
-#endif
 #define BP_ENABLE_AVRISP_MKII_SUPPORT
 #define ROMPTR
 #define ON 1
@@ -48,13 +44,6 @@ static struct { unsigned T4IP; } IPC6bits;
 static struct { unsigned CN52PUE; } CNPU4bits;
 static struct { unsigned USBEN; } U1CONbits;
 static struct { unsigned NSTDIS; } INTCON1bits;
-#ifdef AVRISP_NATIVE_V3
-static unsigned U1BRG, U1TXREG;
-static struct { unsigned UTXBF; } U1STAbits;
-static bool user_serial_check_overflow(void);
-static void user_serial_clear_overflow(void);
-static void user_serial_wait_transmission_done(void) {}
-#endif
 typedef struct {
   unsigned char BDCNT;
   volatile unsigned char BDSTAT;

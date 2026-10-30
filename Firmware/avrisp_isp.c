@@ -87,16 +87,11 @@ static void avrisp_isp_rescue_clock_enable(void) {
   OC5CON = 0x0000;
   TMR2 = 0;
 
-#ifdef BUSPIRATEV4
   /* Enhanced OC: OCxRS is the period, OCxR the duty, self-synchronized. */
   OC5CON2 = 0x001F;
   OC5TMR = 0;
   OC5R = 2;
   OC5RS = 3;
-#else
-  OC5R = 2;
-  OC5RS = 2;
-#endif
 
   BP_CS_RPOUT = OC5_IO;
   BP_CS_DIR = OUTPUT;
@@ -111,9 +106,7 @@ static void avrisp_isp_rescue_clock_disable(void) {
   T2CONbits.TON = OFF;
   T2CON = 0x0000;
   OC5CON = 0x0000;
-#ifdef BUSPIRATEV4
   OC5CON2 = 0;
-#endif
 
   BP_CS_RPOUT = 0;
   AVRISP_CS_LAT = LOW;
@@ -343,11 +336,7 @@ void avrisp_isp_initialise(void) {
   BP_CLK_ODC = 0;
   BP_MISO_ODC = 0;
   BP_CS_ODC = 0;
-#ifdef BUSPIRATEV4
   BP_AUX_ODC = 0;
-#else
-  BP_AUX0_ODC = 0;
-#endif
   avrisp_isp_rescue_clock_enable();
 }
 
@@ -658,25 +647,16 @@ void avrisp_isp_calibrate(void) {
   TMR2 = 0;
   PR2 = 487; /* 16 MHz / 488 = 32786.9 Hz (+0.058% vs 32768 Hz). */
   OC5R = 244;
-#ifdef BUSPIRATEV4
   OC5CON2 = 0x001F;
   OC5TMR = 0;
   OC5RS = 487;
-#else
-  OC5RS = 244;
-#endif
   BP_MOSI_RPOUT = OC5_IO;
   OC5CON = 0x0006;
   IFS0bits.T2IF = 0;
   T2CONbits.TON = ON;
 
-#ifdef BUSPIRATEV4
   uint16_t saved_pullup = CNPU4bits.CN52PUE;
   CNPU4bits.CN52PUE = 1;
-#else
-  uint16_t saved_pullup = CNPU2bits.CN23PUE;
-  CNPU2bits.CN23PUE = 1;
-#endif
 
   /* Release ~RESET. */
   avrisp_isp_change_reset_line(false);
@@ -706,11 +686,7 @@ void avrisp_isp_calibrate(void) {
   BP_MOSI_RPOUT = 0;
   AVRISP_MOSI_LAT = LOW;
   BP_MOSI_DIR = INPUT;
-#ifdef BUSPIRATEV4
   CNPU4bits.CN52PUE = saved_pullup;
-#else
-  CNPU2bits.CN23PUE = saved_pullup;
-#endif
   avrisp_isp_rescue_clock_enable();
 
   avrisp_write_byte(CMD_OSCCAL);

@@ -263,12 +263,12 @@
  * Enables the AVRISP-MKII compatible programmer personality: ISP, PDI and
  * TPI programming of AVR targets, using the Bus Pirate as a programmer.
  *
- * @note BPv3 default firmware status: INCLUDED (serial route only)
+ * @note BPv3 firmware status: NOT AVAILABLE
  * @note BPv4 default firmware status: INCLUDED
  *
  * On BPv4 the personality can re-enumerate the device as an AVRISP mkII
- * (VID/PID 03EB:2104) for use with avrdude and Atmel Studio.  Both boards
- * additionally provide a framed STK500v2 serial fallback.  The protocol
+ * (VID/PID 03EB:2104) for use with avrdude-compatible hosts. BPv4 also
+ * provides a framed STK500v2 fallback over USB CDC. The protocol
  * engine is ported from LUFA's AVRISP-MKII project; see
  * Documentation/avrisp_mkii.md.
  */
@@ -345,7 +345,6 @@
 #define BP_ENABLE_SPI_SUPPORT
 #define BP_ENABLE_SUMP_SUPPORT
 #define BP_ENABLE_UART_SUPPORT
-#define BP_ENABLE_AVRISP_MKII_SUPPORT
 #endif /* BUSPIRATEV3 */
 
 #endif /* !BP_CUSTOM_FEATURE_SET */
@@ -366,6 +365,10 @@
 #define BP_ENABLE_SUMP_SUPPORT
 #define BP_ENABLE_UART_SUPPORT
 #endif /* BP_CUSTOM_FEATURE_SET */
+
+#if defined(BP_ENABLE_AVRISP_MKII_SUPPORT) && !defined(BUSPIRATEV4)
+#error "The AVRISP-MKII personality requires Bus Pirate v4 hardware."
+#endif
 
 /* 1-Wire module configuration definitions. */
 
