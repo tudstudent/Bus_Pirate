@@ -69,7 +69,8 @@ typedef struct {
 #define UOWN 0x80
 #define DTS 0x40
 #define DTSEN 0x08
-#define CONFIGURED_STATE 5
+#define DEFAULT_STATE 0x04
+#define CONFIGURED_STATE 0x20
 static unsigned USB_UEP1, USB_UEP2;
 static BDentry usb_bdt[6];
 extern volatile uint8_t usb_device_state;
@@ -77,6 +78,9 @@ static void mock_usb_in(void);
 static void mock_usb_out(void);
 static void mock_spi(void);
 static void mock_bit(bool drive, bool bit, bool sample);
+static void mock_usb_configure(void);
+static bool mock_enumerating;
+static unsigned mock_configuration_polls, mock_sof_registrations;
 static void bp_delay_us(unsigned us);
 static void bp_delay_ms(unsigned ms);
 static bool user_serial_ready_to_read(void);
@@ -99,10 +103,15 @@ static void DisableGlobalUsbInterrupt(void) {}
 static void EnableUsbGlobalInterrupt(void) {}
 static void initCDC(void) {}
 static void CDCFlushOnTimeout(void) {}
-static void usb_register_sof_handler(void (*f)(void)) { (void)f; }
+static void usb_register_sof_handler(void (*f)(void)) {
+  (void)f;
+  mock_sof_registrations++;
+}
 static void usb_init(const unsigned char *a, const unsigned char *b,
                      const unsigned char *c, unsigned n) {
   (void)a; (void)b; (void)c; (void)n;
 }
-static void usb_start(void) { usb_device_state = CONFIGURED_STATE; }
+static void usb_start(void) {
+  usb_device_state = mock_enumerating ? DEFAULT_STATE : CONFIGURED_STATE;
+}
 #endif

@@ -42,6 +42,16 @@ static unsigned getInReady(void) {
   if (blocked_cdc) bp_delay_ms(1);
   return !blocked_cdc;
 }
+static void mock_usb_configure(void) {
+  assert(mock_enumerating);
+  assert(mock_sof_registrations == 0);
+  if (++mock_configuration_polls == 3) {
+    usb_device_state = CONFIGURED_STATE;
+    mock_enumerating = false;
+  } else {
+    usb_device_state = 0; /* A bus reset clears BDs before configuration. */
+  }
+}
 static void mock_usb_in(void) {
   if (avrisp_ep_in->BDSTAT & UOWN) {
     unsigned n = avrisp_ep_in->BDCNT;
@@ -132,6 +142,15 @@ static bool contains(const uint8_t *p, unsigned n) {
 }
 int main(void) {
   uint8_t p[400] = {CMD_SIGN_ON};
+  (void)mock_usb_configure;
+  (void)CDCFlushOnTimeout;
+  (void)usb_register_sof_handler;
+  reset_test();
+  mock_enumerating=true;
+  mock_configuration_polls=mock_sof_registrations=0;
+  avrisp_usb_switch_to_cdc();
+  CHECK(mock_configuration_polls == 3 && !mock_enumerating);
+  CHECK(usb_device_state == CONFIGURED_STATE && !mock_sof_registrations);
   reset_test();
   static const unsigned primary[] = {64,16,4,1};
   static const unsigned frequencies[] = {8000000,4000000,2000000,1000000,500000,250000,125000};
