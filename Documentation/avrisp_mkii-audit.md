@@ -6,6 +6,14 @@ All fixes are uncommitted. No device, USB programmer, COM port, flashing,
 or target programming was accessed. This is source/build verification,
 not a claim of electrical or bench conformance.
 
+**Bench update (2026-10-30):** the audited fixes are committed (`9492bbb`
+and the bench-fix series after it); the combined firmware passed full
+hardware validation (XM64 PDI incl. erase/restore; ATmega64A ISP incl.
+write/readback; serial route; USB entry/idle-exit incl. Windows driver
+bind + PnP restarts).  Evidence and residual observations:
+`WORKLOG-AVRMKII.md` §14 (esp. §14.9–§14.13).  The 2026-10-28 sentences
+above describe that snapshot only.
+
 ## Evidence
 
 - LUFA checkout: `90d65ba059d91078a34b9c26c8772ee14b556a13`, project

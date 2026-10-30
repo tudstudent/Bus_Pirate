@@ -141,9 +141,14 @@ it does not install that firmware or directly program an OSCCAL fuse.
   v3 build as build-verified only.
 - TPI: the protocol engine is complete, but no TPI-capable target was
   available for bench verification yet.
-- All routes are build-verified only until bench testing is completed.
-  PDI/TPI bit timing, USB re-enumeration, and rescue/calibration clocks
-  must be checked on the combined firmware before trusting writes.
+- **Bench status (2026-10-30):** the combined firmware is
+  **hardware-verified** — XM64/ATxmega128A3U **PDI** (signature, read,
+  erase, write + verify, EEPROM, fuses, restore), **ATmega64A ISP**
+  (signature, fuses, erase, write + full readback, EEPROM, fuse write),
+  mkII USB entry/re-enumeration/idle-exit (incl. Windows driver bind and
+  PnP restarts) and the serial STK500v2 route.  **TPI remains
+  build-verified only** (no ATtiny target available).  Full records:
+  `WORKLOG-AVRMKII.md` §14.11–§14.13.
 - Timer 3 supplies the 10 ms watchdog; Timer 4 supplies a 25 kHz idle
   PDI/TPI clock between commands. Byte transfers use software clocking
   at approximately 125 kHz. Timer 1 remains the normal delay timebase;
@@ -159,5 +164,6 @@ it does not install that firmware or directly program an OSCCAL fuse.
   status rather than LUFA's stall/no-reply paths. XPROG CRC preserves
   LUFA's unusual high-byte, low-byte, middle-byte reply order.
 - The historical `Firmware-Alternates/firmware-STK500v2` tree remains
-  in the repository pending the separate post-bench cleanup; this
-  built-in personality is its intended replacement.
+  in the repository pending the queued post-bench cleanup (now
+  unblocked — see `WORKLOG-AVRMKII.md` §15, #233); this built-in
+  personality is its intended replacement.
