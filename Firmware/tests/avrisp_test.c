@@ -306,9 +306,16 @@ int main(void) {
   reply((uint8_t[]){0x50,3,0},3);
   uint8_t tagged[259] = {0xa0,0xff,0x64};
   CHECK(contains(tagged,sizeof(tagged))); /* REPEAT 255 + all 256 tags */
+  request((uint8_t[]){0x50,7,2,0,32},5);
+  wire_len=0;
+  request((uint8_t[]){0x50,3,7,0,0x8c,0,0x20},7);
+  reply((uint8_t[]){0x50,3,0},3);
+  uint8_t page_tags[35] = {0xa0,31,0x64};
+  CHECK(contains(page_tags,sizeof(page_tags)));
+  CHECK(contains((uint8_t[]){0x4c,0x20,0,0x8c,0,0},6));
   request((uint8_t[]){0x50,7,2,0,0},5);
   reply((uint8_t[]){0x50,7,1},3);
-  CHECK(avrisp_xprog_eeprom_page_size == 256);
+  CHECK(avrisp_xprog_eeprom_page_size == 32);
   request((uint8_t[]){0x51,99},2);
   reply((uint8_t[]){0x51,STATUS_CMD_FAILED},2);
   CHECK(avrisp_xprog_selected_protocol == 0);
