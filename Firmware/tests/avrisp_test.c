@@ -23,6 +23,10 @@ static bool mock_zero_packets;
 static unsigned mock_run_polls, mock_restart_at;
 static uint8_t serial_rx[2048], serial_tx[2048];
 static unsigned serial_len, serial_pos, serial_tx_len;
+static uint8_t isp_rx[128];
+static unsigned isp_rx_len, isp_rx_pos, delay_ms_total;
+static bool check_isp_reset;
+static unsigned expected_isp_reset;
 
 #define CHECK(x) do { assert(x); checks++; } while (0)
 
@@ -34,7 +38,10 @@ static void bp_delay_us(unsigned us) {
   }
   if (T2CONbits.TON) IFS0bits.T2IF = 1;
 }
-static void bp_delay_ms(unsigned ms) { bp_delay_us(ms * 1000); }
+static void bp_delay_ms(unsigned ms) {
+  delay_ms_total += ms;
+  bp_delay_us(ms * 1000);
+}
 static bool user_serial_ready_to_read(void) { return serial_pos < serial_len; }
 static uint8_t user_serial_read_byte(void) { return serial_rx[serial_pos++]; }
 static void user_serial_transmit_character(uint8_t b) {
@@ -97,8 +104,11 @@ static void mock_usb_out(void) {
   avrisp_ep_out->BDSTAT &= ~UOWN;
 }
 static void mock_spi(void) {
+  if (check_isp_reset) {
+    CHECK(BP_AUX0_DIR == OUTPUT && AVRISP_AUX_LAT == expected_isp_reset);
+  }
   spi[spi_len++] = SPI1BUF;
-  SPI1BUF = spi_len & 0xff;
+  SPI1BUF = isp_rx_pos < isp_rx_len ? isp_rx[isp_rx_pos++] : spi_len & 0xff;
   IFS0bits.SPI1IF = 1;
 }
 static void mock_bit(bool drive, bool bit, bool sample) {
@@ -128,6 +138,8 @@ static void reset_test(void) {
   in_len = packet_count = out_pos = wire_len = spi_len = 0;
   phy_len = phy_pos = rx_bit = tx_bit = tx_value = 0;
   bad_parity = bad_stop = false;
+  isp_rx_len = isp_rx_pos = 0;
+  check_isp_reset = false;
   avrisp_timeout_ticks = AVRISP_TIMEOUT_TICKS;
   avrisp_activity_ticks = AVRISP_IDLE_TICKS;
   avrisp_transport = AVRISP_TRANSPORT_USB;
@@ -168,11 +180,67 @@ static bool contains(const uint8_t *p, unsigned n) {
     if (!memcmp(wire + i, p, n)) return true;
   return false;
 }
+static void test_isp_first_contact(void) {
+  /* Distinct delays and poll fields catch wire-order mistakes in the parser. */
+  uint8_t enter[] = {CMD_ENTER_PROGMODE_ISP,200,31,17,3,2,0x53,3,0xac,0x53,0,0};
+  reset_test();
+  request((uint8_t[]){CMD_GET_PARAMETER,PARAM_RESET_POLARITY},2);
+  reply((uint8_t[]){CMD_GET_PARAMETER,0,1},3);
+  request((uint8_t[]){CMD_SET_PARAMETER,PARAM_SCK_DURATION,6},3);
+  reply((uint8_t[]){CMD_SET_PARAMETER,0},2);
+  CHECK(avrisp_param_get(PARAM_RESET_POLARITY) == 1);
+  memcpy(isp_rx,(uint8_t[]){0xff,0xaa,0,0xcc,0x11,0x22,0x53,0x44},8);
+  isp_rx_len = 8;
+  check_isp_reset = true;
+  expected_isp_reset = LOW;
+  unsigned delay_start = delay_ms_total;
+  request(enter,sizeof(enter));
+  reply((uint8_t[]){CMD_ENTER_PROGMODE_ISP,0},2);
+  CHECK(spi_len == 8 && isp_rx_pos == 8);
+  CHECK(!memcmp(spi,enter+8,4) && !memcmp(spi+4,enter+8,4));
+  CHECK(delay_ms_total-delay_start == 17+31+8*2+2*31);
+  request((uint8_t[]){CMD_LEAVE_PROGMODE_ISP,1,1},3);
+  reply((uint8_t[]){CMD_LEAVE_PROGMODE_ISP,0},2);
+  CHECK(BP_AUX0_DIR == INPUT && AVRISP_AUX_LAT == LOW);
+
+  reset_test();
+  memset(isp_rx,0xff,sizeof(isp_rx)); isp_rx_len = sizeof(isp_rx);
+  request(enter,sizeof(enter));
+  reply((uint8_t[]){CMD_ENTER_PROGMODE_ISP,STATUS_CMD_FAILED},2);
+  CHECK(spi_len == 12);
+  /* Failed-enable diagnostics query a separate parameter, not a reply byte. */
+  request((uint8_t[]){CMD_GET_PARAMETER,PARAM_STATUS_TGT_CONN},2);
+  reply((uint8_t[]){CMD_GET_PARAMETER,0,STATUS_ISP_READY},3);
+
+  reset_test();
+  enter[7] = 0; /* Host may explicitly disable echo polling. */
+  request(enter,sizeof(enter));
+  reply((uint8_t[]){CMD_ENTER_PROGMODE_ISP,0},2);
+  CHECK(spi_len == 4);
+
+  reset_test();
+  request((uint8_t[]){CMD_SET_PARAMETER,PARAM_RESET_POLARITY,0},3);
+  reply((uint8_t[]){CMD_SET_PARAMETER,0},2);
+  check_isp_reset = true; expected_isp_reset = HIGH;
+  request(enter,sizeof(enter));
+  reply((uint8_t[]){CMD_ENTER_PROGMODE_ISP,0},2);
+  CHECK(spi_len == 4 && AVRISP_AUX_LAT == HIGH);
+  avrisp_v2_initialise();
+  CHECK(avrisp_param_get(PARAM_RESET_POLARITY) == 1);
+
+  reset_test();
+  BP_AUX0_DIR = INPUT;
+  request(enter,sizeof(enter)-1);
+  reply((uint8_t[]){CMD_ENTER_PROGMODE_ISP,STATUS_CMD_FAILED},2);
+  CHECK(spi_len == 0 && BP_AUX0_DIR == INPUT);
+  reset_test();
+}
 int main(void) {
   uint8_t p[400] = {CMD_SIGN_ON};
   (void)mock_usb_configure;
   (void)CDCFlushOnTimeout;
   (void)usb_register_sof_handler;
+  test_isp_first_contact();
   reset_test();
   mock_enumerating=true;
   mock_attach_attempts=mock_fail_configurations=0;

@@ -76,6 +76,59 @@ static bool avrisp_isp_hardware_spi;
 /** Currently selected SCK duration index. */
 static uint8_t avrisp_isp_sck_duration;
 
+/* Temporary bench capture: no USB/CDC writes occur while clocking a target. */
+static uint8_t isp_debug_header[34];
+static uint8_t isp_debug_events[192][6];
+static uint8_t isp_debug_count, isp_debug_dropped;
+static bool isp_debug_active;
+
+static void isp_debug_event(uint8_t kind, uint8_t a, uint8_t b,
+                            uint8_t c, uint8_t d) {
+  if (!isp_debug_active) return;
+  if (isp_debug_count == 192) {
+    isp_debug_dropped = 1;
+    return;
+  }
+  uint8_t *event = isp_debug_events[isp_debug_count++];
+  event[0] = kind;
+  event[1] = (BP_AUX0 ? 1 : 0) | (BP_AUX0_DIR ? 2 : 0) |
+             (AVRISP_AUX_LAT ? 4 : 0) | (BP_MISO ? 8 : 0) |
+             (BP_CLK ? 16 : 0) | (BP_MOSI ? 32 : 0) |
+             (BP_MISO_DIR ? 64 : 0) | (BP_CLK_DIR ? 128 : 0);
+  event[2] = a; event[3] = b; event[4] = c; event[5] = d;
+}
+
+static void isp_debug_hex(uint8_t value) {
+  static const char hex[] = "0123456789abcdef";
+  user_serial_transmit_character(hex[value >> 4]);
+  user_serial_transmit_character(hex[value & 15]);
+}
+
+/* Requested by terminal 'i' AFTER returning to CDC, never on the mkII pipe. */
+void avrisp_isp_debug_dump(void) {
+  if (!isp_debug_header[0]) return;
+  const char prefix[] = "ISPD1 ";
+  for (uint8_t i = 0; i < sizeof(prefix)-1; i++)
+    user_serial_transmit_character(prefix[i]);
+  isp_debug_header[28] = isp_debug_dropped;
+  isp_debug_header[29] = 0;
+  isp_debug_header[30] = isp_debug_count;
+  uint8_t checksum = 0;
+  for (uint8_t i = 0; i < sizeof(isp_debug_header); i++) {
+    checksum ^= isp_debug_header[i];
+    isp_debug_hex(isp_debug_header[i]);
+  }
+  for (uint8_t i = 0; i < isp_debug_count; i++) {
+    for (uint8_t j = 0; j < 6; j++) {
+      checksum ^= isp_debug_events[i][j];
+      isp_debug_hex(isp_debug_events[i][j]);
+    }
+  }
+  isp_debug_hex(checksum);
+  user_serial_transmit_character('\r');
+  user_serial_transmit_character('\n');
+}
+
 /* -------------------------------------------------------------------------
  * Rescue clock (4 MHz on the CS pin).
  * ------------------------------------------------------------------------- */
@@ -268,6 +321,7 @@ static void avrisp_isp_change_reset_line(const bool assert) {
     BP_AUX0_DIR = INPUT;
     AVRISP_AUX_LAT = LOW;
   }
+  isp_debug_event(assert ? 3 : 4, 0, 0, 0, 0);
 }
 
 static uint8_t avrisp_isp_wait_while_busy(void) {
@@ -334,6 +388,7 @@ static uint8_t avrisp_isp_wait_for_prog_complete(
  * ------------------------------------------------------------------------- */
 
 void avrisp_isp_initialise(void) {
+  isp_debug_active = false;
   SPI1STATbits.SPIEN = OFF;
   BP_MOSI_RPOUT = 0;
   BP_CLK_RPOUT = 0;
@@ -355,6 +410,7 @@ void avrisp_isp_shutdown(void) {
   avrisp_isp_change_reset_line(false);
   avrisp_isp_disable_target();
   avrisp_isp_rescue_clock_disable();
+  isp_debug_active = false;
 }
 
 /* -------------------------------------------------------------------------
@@ -377,6 +433,26 @@ void avrisp_isp_enter_mode(void) {
 
   (void)timeout_ms;
 
+  isp_debug_active = true;
+  isp_debug_count = isp_debug_dropped = 0;
+  isp_debug_header[0] = 1;
+  isp_debug_header[1] = avrisp_param_get(PARAM_SCK_DURATION);
+  isp_debug_header[2] = avrisp_param_get(PARAM_RESET_POLARITY);
+  isp_debug_header[3] = avrisp_param_get(PARAM_VTARGET);
+  for (uint8_t i = 0; i < 11; i++)
+    isp_debug_header[4+i] = avrisp_command_buffer[1+i];
+  isp_debug_header[15] = timeout_ms;
+  isp_debug_header[16] = pin_stab_delay;
+  isp_debug_header[17] = execution_delay;
+  isp_debug_header[18] = synch_loops;
+  isp_debug_header[19] = byte_delay;
+  isp_debug_header[20] = poll_value;
+  isp_debug_header[21] = poll_index;
+  for (uint8_t i = 0; i < 4; i++)
+    isp_debug_header[22+i] = enter_programming_bytes[i];
+  isp_debug_header[26] = STATUS_CMD_FAILED;
+  isp_debug_header[27] = 0;
+
   avrisp_response_begin();
 
   uint8_t response_status = STATUS_CMD_FAILED;
@@ -384,12 +460,18 @@ void avrisp_isp_enter_mode(void) {
   avrisp_current_address = 0;
   avrisp_load_extended_address = false;
   avrisp_xprog_shutdown();
+  isp_debug_event(1, 0, 0, 0, 0);
 
   avrisp_isp_delay_ms(execution_delay);
   avrisp_isp_enable_target();
+  isp_debug_header[31] = SPI1CON1 >> 8;
+  isp_debug_header[32] = SPI1CON1;
+  isp_debug_header[33] = avrisp_isp_hardware_spi;
+  isp_debug_event(2, 0, 0, 0, 0);
 
   avrisp_isp_change_reset_line(true);
   avrisp_isp_delay_ms(pin_stab_delay);
+  isp_debug_event(5, 0, 0, 0, 0);
 
   while (synch_loops-- && avrisp_timeout_ticks) {
     uint8_t response_bytes[4];
@@ -399,6 +481,9 @@ void avrisp_isp_enter_mode(void) {
       response_bytes[index] =
           avrisp_isp_transfer_byte(enter_programming_bytes[index]);
     }
+    isp_debug_header[27]++;
+    isp_debug_event(7, response_bytes[0], response_bytes[1],
+                    response_bytes[2], response_bytes[3]);
 
     if (!poll_index || (response_bytes[poll_index - 1] == poll_value)) {
       response_status = STATUS_CMD_OK;
@@ -407,10 +492,13 @@ void avrisp_isp_enter_mode(void) {
 
     avrisp_isp_change_reset_line(false);
     avrisp_isp_delay_ms(pin_stab_delay);
+    isp_debug_event(6, 0, 0, 0, 0);
     avrisp_isp_change_reset_line(true);
     avrisp_isp_delay_ms(pin_stab_delay);
+    isp_debug_event(5, 0, 0, 0, 0);
   }
 
+  isp_debug_header[26] = response_status;
   avrisp_write_byte(CMD_ENTER_PROGMODE_ISP);
   avrisp_write_byte(response_status);
   avrisp_response_end();

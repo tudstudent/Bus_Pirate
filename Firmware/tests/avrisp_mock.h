@@ -28,6 +28,7 @@
 #define _SPI1CON1_CKE_POSITION 8
 static struct { unsigned LATD1, LATD2, LATD4, LATD5; } LATDbits;
 static unsigned BP_MISO, BP_MOSI_DIR, BP_CLK_DIR, BP_CS_DIR, BP_AUX0_DIR;
+static unsigned BP_AUX0, BP_CLK, BP_MOSI;
 static unsigned BP_MISO_DIR, BP_MOSI_RPOUT, BP_CLK_RPOUT, BP_CS_RPOUT;
 static unsigned BP_MISO_RPOUT, BP_AUX_RPOUT;
 static unsigned BP_MOSI_ODC, BP_CLK_ODC, BP_MISO_ODC, BP_CS_ODC, BP_AUX_ODC;
