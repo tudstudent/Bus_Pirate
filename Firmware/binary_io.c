@@ -363,7 +363,24 @@ Commands:
 010xxxxx //set input(1)/output(0) pin state (returns pin read)
  */
 
-void send_binary_io_mode_identifier(void) { MSG_BBIO_MODE_IDENTIFIER; }
+#if defined(BP_ENABLE_AVRISP_MKII_SUPPORT) && defined(BUSPIRATEV4)
+static bool avrisp_return_trace;
+static uint16_t avrisp_return_identifiers;
+extern volatile uint8_t usb_device_state;
+#endif
+
+void send_binary_io_mode_identifier(void) {
+#if defined(BP_ENABLE_AVRISP_MKII_SUPPORT) && defined(BUSPIRATEV4)
+  if (avrisp_return_trace) {
+    user_serial_transmit_character('~');
+    bp_write_hex_byte(usb_device_state);
+    bp_write_hex_word(++avrisp_return_identifiers);
+    user_serial_transmit_character('~');
+    return;
+  }
+#endif
+  MSG_BBIO_MODE_IDENTIFIER;
+}
 
 void enter_binary_bitbang_mode(void) {
   bp_enable_mode_led();
@@ -453,6 +470,8 @@ int handle_bitbang_command(const bitbang_command command) {
 #if defined(BP_ENABLE_AVRISP_MKII_SUPPORT) && defined(BUSPIRATEV4)
     reset_state();
     avrisp_mkii_enter(AVRISP_TRANSPORT_USB);
+    avrisp_return_trace = true;
+    avrisp_return_identifiers = 0;
 #else
     REPORT_IO_FAILURE();
 #endif /* BP_ENABLE_AVRISP_MKII_SUPPORT && BUSPIRATEV4 */
