@@ -29,10 +29,6 @@
 #include "selftest.h"
 #include "sump.h"
 
-#ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
-#include "avrisp_v2.h"
-#endif
-
 /**
  * ASCII scancode for the NUL character.
  */
@@ -1499,9 +1495,6 @@ void print_version_info(void) {
 
   bp_write_line(")");
   BPMSG1118;
-#ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
-  avrisp_isp_debug_dump();
-#endif
 }
 
 void print_status_info(void) {
