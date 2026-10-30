@@ -22,6 +22,8 @@ for source in ROOT.glob("avrisp_*"):
                             "while ((mock_usb_in(), avrisp_ep_in->BDSTAT) & UOWN)")
         text = text.replace("while (avrisp_ep_out->BDSTAT & UOWN)",
                             "while ((mock_usb_out(), avrisp_ep_out->BDSTAT) & UOWN)")
+        text = text.replace("while (usb_device_state < CONFIGURED_STATE)",
+                            "while ((mock_usb_configure(), usb_device_state) < CONFIGURED_STATE)")
         text = text.replace("while (!IFS0bits.SPI1IF && avrisp_timeout_ticks)",
                             "while ((mock_spi(), !IFS0bits.SPI1IF) && avrisp_timeout_ticks)")
         text = text.replace("bool sampled_level = true;",

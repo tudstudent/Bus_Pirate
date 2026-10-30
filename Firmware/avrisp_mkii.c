@@ -326,9 +326,14 @@ static void avrisp_usb_switch_to_cdc(void) {
   usb_init(cdc_device_descriptor, cdc_config_descriptor, cdc_str_descs,
             AVRISP_CDC_NUM_STRINGS);
   initCDC();
-  usb_register_sof_handler(CDCFlushOnTimeout);
   usb_start();
   EnableUsbGlobalInterrupt();
+
+  /* As at normal startup, CDC is unusable until user_configured_init()
+     arms its BDs and installs the SOF handler. Cleared UOWN bits before
+     then are not received packets: BBIO would consume stale OUT data. */
+  while (usb_device_state < CONFIGURED_STATE) {
+  }
 }
 
 static void avrisp_usb_run(void) {

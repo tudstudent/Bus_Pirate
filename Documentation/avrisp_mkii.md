@@ -44,6 +44,21 @@ tool, choose the "AVRISP mkII" interface and install the WinUSB or
 libusb driver).  The normal Bus Pirate serial port driver is untouched.
 The serial route needs no additional driver at all.
 
+### USB entry troubleshooting
+
+With PowerShell `System.IO.Ports.SerialPort`, binary writes must use all
+three arguments: `$sp.Write([byte[]]@(0x08), 0, 1)`. The single-argument
+call `$sp.Write([byte[]]@(0x08))` selects `Write(string)` and sends ASCII
+`8` (0x38), which BBIO correctly rejects with 0x00. The same trap turns
+a supposed binary-zero probe into ASCII `0` (0x30).
+
+After idle exit, close the old handle and reopen the returned CDC port.
+CDC configuration completes before BBIO resumes, and one `BBIO1` return
+identifier may be waiting. Read through quiescence before sending a new
+binary 0x00 probe; its reply must be exactly one `BBIO1`. Do not discard
+receive buffers while investigating unsolicited output: some serial
+libraries purge them automatically on open and can hide a regression.
+
 ## Use with avrdude (serial route, BPv3/BPv4)
 
 1. Enter binary bitbang mode (BPv3: over the FT232 serial port, which
