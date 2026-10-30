@@ -287,7 +287,10 @@ bool avrisp_xmega_erase_memory(const uint8_t erase_command,
         PDI_CMD_STS(PDI_DATASIZE_4BYTES, PDI_DATASIZE_1BYTE));
     avrisp_xmega_send_nvm_reg_address(XMEGA_NVM_REG_CTRLA);
     avrisp_xprog_send_byte(XMEGA_NVM_BIT_CTRLA_CMDEX);
-  } else if (erase_command == XMEGA_NVM_CMD_ERASEEEPROM) {
+  } else if (erase_command == XMEGA_NVM_CMD_ERASEEEPROM ||
+             erase_command == XMEGA_NVM_CMD_ERASEEEPROMPAGE) {
+    /* AU manual 33.4: both page and whole-EEPROM erases act only on
+       locations tagged by loading the EEPROM page buffer. */
     avrisp_xprog_send_byte(
         PDI_CMD_STS(PDI_DATASIZE_4BYTES, PDI_DATASIZE_1BYTE));
     avrisp_xmega_send_nvm_reg_address(XMEGA_NVM_REG_CMD);
@@ -330,8 +333,13 @@ bool avrisp_xmega_erase_memory(const uint8_t erase_command,
 
     avrisp_xprog_send_byte(
         PDI_CMD_STS(PDI_DATASIZE_4BYTES, PDI_DATASIZE_1BYTE));
-    avrisp_xmega_send_nvm_reg_address(XMEGA_NVM_REG_CTRLA);
-    avrisp_xprog_send_byte(XMEGA_NVM_BIT_CTRLA_CMDEX);
+    if (erase_command == XMEGA_NVM_CMD_ERASEEEPROM) {
+      avrisp_xmega_send_nvm_reg_address(XMEGA_NVM_REG_CTRLA);
+      avrisp_xprog_send_byte(XMEGA_NVM_BIT_CTRLA_CMDEX);
+    } else {
+      avrisp_xmega_send_address(address);
+      avrisp_xprog_send_byte(0x00);
+    }
   } else {
     avrisp_xprog_send_byte(
         PDI_CMD_STS(PDI_DATASIZE_4BYTES, PDI_DATASIZE_1BYTE));
