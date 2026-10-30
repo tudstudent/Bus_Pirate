@@ -16,10 +16,6 @@
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
 
-/** NVM enable key, sent backwards after the SKEY command (LUFA parity). */
-static const uint8_t avrisp_tiny_nvm_enable_key[] = {
-    0x12, 0x89, 0xAB, 0x45, 0xCD, 0xD8, 0x88, 0xFF};
-
 /** Sends the given 16-bit pointer address, LSB first. */
 static void avrisp_tiny_send_pointer_address(const uint16_t address) {
   avrisp_xprog_send_byte(TPI_CMD_SSTPR | 0);
@@ -28,46 +24,19 @@ static void avrisp_tiny_send_pointer_address(const uint16_t address) {
   avrisp_xprog_send_byte(address >> 8);
 }
 
-/** Sends a SIN command for the given I/O address, ready to read data. */
-static void avrisp_tiny_send_read_nvm_register(const uint8_t address) {
-  avrisp_xprog_send_byte(TPI_CMD_SIN(address));
-}
-
 /** Sends a SOUT command for the given I/O address, ready to write data. */
 static void avrisp_tiny_send_write_nvm_register(const uint8_t address) {
   avrisp_xprog_send_byte(TPI_CMD_SOUT(address));
 }
 
 bool avrisp_tiny_wait_nvm_bus(void) {
-  for (;;) {
-    avrisp_xprog_send_byte(TPI_CMD_SLDCS(TPI_REG_STATUS));
-
-    uint8_t status = avrisp_xprog_receive_byte();
-
-    if (!avrisp_timeout_ticks) {
-      return false;
-    }
-
-    if (status & TPI_STATUS_NVM) {
-      return true;
-    }
-  }
+  return avrisp_xprog_wait_status(TPI_CMD_SLDCS(TPI_REG_STATUS),
+                                 TPI_STATUS_NVM, TPI_STATUS_NVM);
 }
 
 bool avrisp_tiny_wait_nvm_controller(void) {
-  for (;;) {
-    avrisp_tiny_send_read_nvm_register(avrisp_xprog_nvm_csr_reg);
-
-    uint8_t status = avrisp_xprog_receive_byte();
-
-    if (!avrisp_timeout_ticks) {
-      return false;
-    }
-
-    if (!(status & (1 << 7))) {
-      return true;
-    }
-  }
+  return avrisp_xprog_wait_status(TPI_CMD_SIN(avrisp_xprog_nvm_csr_reg),
+                                 1 << 7, 0);
 }
 
 bool avrisp_tiny_enable_tpi(void) {
@@ -78,12 +47,7 @@ bool avrisp_tiny_enable_tpi(void) {
   avrisp_xprog_send_byte(0x02);
 
   /* Send the NVM enable key. */
-  avrisp_xprog_send_byte(TPI_CMD_SKEY);
-
-  for (uint8_t index = sizeof(avrisp_tiny_nvm_enable_key); index > 0;
-       index--) {
-    avrisp_xprog_send_byte(avrisp_tiny_nvm_enable_key[index - 1]);
-  }
+  avrisp_xprog_send_nvm_key(TPI_CMD_SKEY);
 
   return avrisp_tiny_wait_nvm_bus();
 }
