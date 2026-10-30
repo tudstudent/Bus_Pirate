@@ -32,6 +32,8 @@ for source in ROOT.glob("avrisp_*"):
                             "while ((mock_spi(), !IFS0bits.SPI1IF) && avrisp_timeout_ticks)")
         text = text.replace("bool sampled_level = true;",
                             "mock_bit(drive, bit, sample);\n  bool sampled_level = true;")
+        text = text.replace("void avrisp_write_byte(const uint8_t value) {",
+                            "void avrisp_write_byte(const uint8_t value) {\n  mock_response_append();")
     (OUT / source.name).write_text(text)
 shutil.copyfile(ROOT / "tests" / "avrisp_mock.h", OUT / "base.h")
 shutil.copyfile(ROOT / "tests" / "avrisp_test.c", OUT / "test.c")

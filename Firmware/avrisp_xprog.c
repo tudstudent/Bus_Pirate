@@ -583,6 +583,9 @@ static void avrisp_xprog_read_memory(void) {
     }
   }
 
+  /* Building a full response can exceed PDI's ~100 us inactivity limit.
+     The target exchange is complete; keep CLK alive during that copy. */
+  avrisp_xprog_resume_clock();
   avrisp_write_byte(CMD_XPROG);
   avrisp_write_byte(XPROG_CMD_READ_MEM);
   avrisp_write_byte(status);

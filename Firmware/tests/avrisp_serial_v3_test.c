@@ -32,6 +32,7 @@ static uint8_t user_serial_read_byte(void) {
 static bool user_serial_check_overflow(void) { advance(1); return overrun; }
 static void user_serial_clear_overflow(void) { overrun=false; }
 static void user_serial_transmit_character(uint8_t b) { (void)b; }
+static void mock_response_append(void) {}
 
 void avrisp_v2_initialise(void) { entry_baud=U1BRG; assert(!INTCON1bits.NSTDIS); }
 void avrisp_isp_initialise(void) {}
