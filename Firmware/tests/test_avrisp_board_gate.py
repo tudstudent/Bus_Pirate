@@ -1,4 +1,7 @@
-"""Check the real XC16 feature gate: supported on BPv4, absent on BPv3."""
+"""Check the real XC16 feature gate: supported on BPv4, absent on BPv3.
+
+Accepts an optional compiler executable path, as does the CDC gate test.
+"""
 from pathlib import Path
 import os
 import re
@@ -11,7 +14,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 compiler = (sys.argv[1] if len(sys.argv) > 1 else str(Path(os.environ.get(
     "XC16_DIR", "C:/Program Files (x86)/Microchip/MPLABXC16/v2.10")) /
     "bin/xc16-gcc.exe"))
-nm = str(Path(compiler).with_name("xc16-nm.exe"))
+nm = str(Path(compiler).with_name("xc16-nm" + Path(compiler).suffix))
 probe = '''#include "configuration.h"
 #ifdef BUSPIRATEV4
 #ifndef BP_ENABLE_AVRISP_MKII_SUPPORT
