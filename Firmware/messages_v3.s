@@ -1571,6 +1571,12 @@ _MSG_UART_BITS_PARITY_PROMPT_str:
 _MSG_UART_BITS_STOP_PROMPT_str:
 	.pasciz "Stop bits:\r\n 1. 1 *default\r\n 2. 2"
 
+	; MSG_UART_DUPLEX_PROMPT
+	.section .text.MSG_UART_DUPLEX_PROMPT, code
+	.global _MSG_UART_DUPLEX_PROMPT_str
+_MSG_UART_DUPLEX_PROMPT_str:
+	.pasciz "Duplex:\r\n 1. Full (TX+RX) *default\r\n 2. Half (single wire)"
+
 	; MSG_UART_BPS_MARKER
 	.section .text.MSG_UART_BPS_MARKER, code
 	.global _MSG_UART_BPS_MARKER_str
@@ -1629,7 +1635,7 @@ _MSG_UART_MACRO_MENU_str:
 	.section .text.MSG_UART_MODE_HEADER, code
 	.global _MSG_UART_MODE_HEADER_str
 _MSG_UART_MODE_HEADER_str:
-	.pasciz "UART (spd brg dbp sb rxp hiz)=( "
+	.pasciz "UART (spd brg dbp sb rxp hiz dup)=( "
 
 	; MSG_UART_MODE_IDENTIFIER
 	.section .text.MSG_UART_MODE_IDENTIFIER, code
