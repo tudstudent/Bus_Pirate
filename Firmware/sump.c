@@ -82,60 +82,6 @@ static void sump_stream_close(void) {
 #define SUMP_STREAM_CLOSE() do { } while (0)
 #endif /* BUSPIRATEV4 */
 
-#ifdef BUSPIRATEV4
-#include "dp_usb/cdc.h"
-#endif /* BUSPIRATEV4 */
-
-#ifdef BUSPIRATEV4
-/*
- * Bulk CDC stream for the capture readouts: bytes go straight into the
- * USB IN buffer (getinbuf_cdc()/write_cdc(), the path spi.c's sniffer
- * uses) instead of one putc transaction per byte.  setLock()/freeLock()
- * keep the stack's timeout flush from touching the buffer mid-stream;
- * write_cdc() blocks for back-pressure when the buffers are full.
- */
-static BYTE *sump_stream_ptr;
-static uint16_t sump_stream_space;
-static uint16_t sump_stream_pending;
-
-static void sump_stream_open(void) {
-  setLock();
-  sump_stream_pending = 0;
-  sump_stream_ptr = getinbuf_cdc(&sump_stream_space);
-}
-
-static void sump_stream_byte(uint8_t value) {
-  if (sump_stream_space == 0) {
-    write_cdc(sump_stream_pending);
-    sump_stream_pending = 0;
-    sump_stream_ptr = getinbuf_cdc(&sump_stream_space);
-  }
-  *sump_stream_ptr++ = value;
-  sump_stream_space--;
-  sump_stream_pending++;
-}
-
-static void sump_stream_close(void) {
-  if (sump_stream_pending) {
-    write_cdc(sump_stream_pending);
-    sump_stream_pending = 0;
-  }
-  /* Push the final partial buffer out now; the stack would otherwise
-     wait for its timeout flush (the ID/metadata replies are a lot
-     smaller than one buffer). */
-  CDC_Flush_In_Now();
-  freeLock();
-}
-
-#define SUMP_STREAM_OPEN() sump_stream_open()
-#define SUMP_STREAM_BYTE(value) sump_stream_byte(value)
-#define SUMP_STREAM_CLOSE() sump_stream_close()
-#else
-#define SUMP_STREAM_OPEN() do { } while (0)
-#define SUMP_STREAM_BYTE(value) user_serial_transmit_character(value)
-#define SUMP_STREAM_CLOSE() do { } while (0)
-#endif /* BUSPIRATEV4 */
-
 /*
  * SUMP command set - taken from http://www.sump.org/projects/analyzer/protocol/
  * With additions taken from
