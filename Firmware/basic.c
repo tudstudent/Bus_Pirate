@@ -642,7 +642,7 @@ int16_t assign(void) {
  */
 static void write_mode_name(void) {
   bus_pirate_configuration.quiet = OFF;
-  bp_write_line(enabled_protocols[bus_pirate_configuration.bus_mode].name);
+  bp_write_line(bp_current_protocol()->name);
   bus_pirate_configuration.quiet = ON;
 }
 

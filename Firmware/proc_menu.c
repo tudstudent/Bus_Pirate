@@ -1245,7 +1245,7 @@ int bp_change_mode(int mode) {
     return -1;
   }
 
-  enabled_protocols[bus_pirate_configuration.bus_mode].cleanup();
+  bp_current_protocol()->cleanup();
   bp_reset_board_state();
   bus_pirate_configuration.bus_mode = mode - 1;
 
@@ -1255,7 +1255,7 @@ int bp_change_mode(int mode) {
    * interactive prompts would choose - without printing or blocking.
    */
   setup_defaults_mode = ON;
-  enabled_protocols[bus_pirate_configuration.bus_mode].setup_prepare();
+  bp_current_protocol()->setup_prepare();
   setup_defaults_mode = OFF;
 
   mode_configuration.command_error = NO;
@@ -1264,7 +1264,7 @@ int bp_change_mode(int mode) {
     bp_enable_mode_led();
   }
 
-  enabled_protocols[bus_pirate_configuration.bus_mode].setup_execute();
+  bp_current_protocol()->setup_execute();
 
   return 0;
 }
