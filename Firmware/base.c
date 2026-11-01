@@ -132,7 +132,7 @@ static void print_decimal(const uint32_t value, const uint32_t denominator,
  *
  * @param[in] number the value to print.
  */
-static inline void print_decimal16(const uint16_t number);
+void bp_write_dec_word(const uint16_t number);
 
 #ifdef BP_USE_HARDWARE_DELAY_TIMER
 
