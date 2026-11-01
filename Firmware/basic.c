@@ -239,7 +239,6 @@ typedef enum {
 extern bus_pirate_configuration_t bus_pirate_configuration;
 extern mode_configuration_t mode_configuration;
 extern command_t last_command;
-extern bus_pirate_protocol_t enabled_protocols[ENABLED_PROTOCOLS_COUNT];
 
 typedef struct {
   uint16_t from;
@@ -436,8 +435,7 @@ uint16_t handle_special_token(const uint8_t token) {
   switch (token) {
 
   case TOK_RECEIVE: {
-    uint16_t received =
-        enabled_protocols[bus_pirate_configuration.bus_mode].read();
+    uint16_t received = bp_current_protocol()->read();
 
     /*
      * Honour the LSb/MSb setting, exactly as the interactive 'r' command
@@ -462,17 +460,17 @@ uint16_t handle_special_token(const uint8_t token) {
       value = bp_reverse_integer(value, mode_configuration.numbits);
     }
 
-    return enabled_protocols[bus_pirate_configuration.bus_mode].send(value);
+    return bp_current_protocol()->send(value);
   }
 
   case TOK_AUX:
     return bp_aux_pin_read();
 
   case TOK_DAT:
-    return enabled_protocols[bus_pirate_configuration.bus_mode].data_state();
+    return bp_current_protocol()->data_state();
 
   case TOK_BITREAD:
-    return enabled_protocols[bus_pirate_configuration.bus_mode].read_bit();
+    return bp_current_protocol()->read_bit();
 
   case TOK_PSU:
     return BP_VREGEN;
@@ -1009,7 +1007,7 @@ void interpreter(void) {
       program_counter_updated = YES;
       basic_program_counter += 4;
 
-      enabled_protocols[bus_pirate_configuration.bus_mode].start();
+      bp_current_protocol()->start();
       handle_else_statement();
       break;
 
@@ -1017,7 +1015,7 @@ void interpreter(void) {
       program_counter_updated = YES;
       basic_program_counter += 4;
 
-      enabled_protocols[bus_pirate_configuration.bus_mode].start_with_read();
+      bp_current_protocol()->start_with_read();
       handle_else_statement();
       break;
 
@@ -1025,7 +1023,7 @@ void interpreter(void) {
       program_counter_updated = YES;
       basic_program_counter += 4;
 
-      enabled_protocols[bus_pirate_configuration.bus_mode].stop();
+      bp_current_protocol()->stop();
       handle_else_statement();
       break;
 
@@ -1033,14 +1031,14 @@ void interpreter(void) {
       program_counter_updated = YES;
       basic_program_counter += 4;
 
-      enabled_protocols[bus_pirate_configuration.bus_mode].stop_from_read();
+      bp_current_protocol()->stop_from_read();
       handle_else_statement();
       break;
 
     case TOK_SEND:
       program_counter_updated = YES;
       basic_program_counter += 4;
-      enabled_protocols[bus_pirate_configuration.bus_mode].send((int)assign());
+      bp_current_protocol()->send((int)assign());
       handle_else_statement();
       break;
 
@@ -1126,9 +1124,9 @@ void interpreter(void) {
       basic_program_counter += 4;
 
       if (assign()) {
-        enabled_protocols[bus_pirate_configuration.bus_mode].data_high();
+        bp_current_protocol()->data_high();
       } else {
-        enabled_protocols[bus_pirate_configuration.bus_mode].data_low();
+        bp_current_protocol()->data_low();
       }
       handle_else_statement();
       break;
@@ -1139,13 +1137,13 @@ void interpreter(void) {
 
       switch (assign()) {
       case 0:
-        enabled_protocols[bus_pirate_configuration.bus_mode].clock_low();
+        bp_current_protocol()->clock_low();
         break;
       case 1:
-        enabled_protocols[bus_pirate_configuration.bus_mode].clock_high();
+        bp_current_protocol()->clock_high();
         break;
       case 2:
-        enabled_protocols[bus_pirate_configuration.bus_mode].clock_pulse();
+        bp_current_protocol()->clock_pulse();
         break;
       }
       handle_else_statement();
@@ -1201,7 +1199,7 @@ void interpreter(void) {
       program_counter_updated = YES;
       basic_program_counter += 4;
       temp = assign();
-      enabled_protocols[bus_pirate_configuration.bus_mode].run_macro(temp);
+      bp_current_protocol()->run_macro(temp);
       handle_else_statement();
       break;
 
@@ -1651,8 +1649,7 @@ void save(void) {
   int i, j;
   int slot;
 
-  consumewhitechars();
-  slot = getint();
+  slot = getint_with_spaces();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
@@ -1704,8 +1701,7 @@ void load(void) {
   int i;
   int slot;
 
-  consumewhitechars();
-  slot = getint();
+  slot = getint_with_spaces();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
