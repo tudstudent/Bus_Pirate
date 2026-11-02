@@ -69,7 +69,7 @@ BIN2HEX := $(TOOLCHAIN)bin2hex
 # -----------------------------------------------------------------------------
 
 SOURCES := \
-	1wire.c \
+	protocol_wire/1wire.c \
 	aux_pin.c \
 	avrisp_isp.c \
 	avrisp_mkii.c \
@@ -95,14 +95,14 @@ SOURCES := \
 	pc_at_keyboard.c \
 	pic.c \
 	proc_menu.c \
-	raw2wire.c \
-	raw3wire.c \
+	protocol_wire/raw2wire.c \
+	protocol_wire/raw3wire.c \
 	selftest.c \
 	smps.c \
 	spi.c \
 	sump.c \
-	uart.c \
-	uart2.c
+	protocol_uart/uart.c \
+	protocol_uart/uart2.c
 
 ifeq ($(BP_VERSION),V4)
 SOURCES += \

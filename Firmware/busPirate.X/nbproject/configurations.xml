@@ -28,7 +28,7 @@
       <itemPath>../configuration.h</itemPath>
       <itemPath>../hd44780.h</itemPath>
       <itemPath>../spi.h</itemPath>
-      <itemPath>../uart.h</itemPath>
+      <itemPath>../protocol_uart/uart.h</itemPath>
       <itemPath>../jtag.h</itemPath>
       <itemPath>../smps.h</itemPath>
       <itemPath>../openocd.h</itemPath>
@@ -38,7 +38,7 @@
       <itemPath>../binary_io.h</itemPath>
       <itemPath>../proc_menu.h</itemPath>
       <itemPath>../core.h</itemPath>
-      <itemPath>../uart2.h</itemPath>
+      <itemPath>../protocol_uart/uart2.h</itemPath>
       <itemPath>../aux_pin.h</itemPath>
       <itemPath>../protocol_wire/raw_common.h</itemPath>
       <itemPath>../types.h</itemPath>
@@ -96,7 +96,7 @@
       <itemPath>../i2c.c</itemPath>
       <itemPath>../hd44780.c</itemPath>
       <itemPath>../spi.c</itemPath>
-      <itemPath>../uart.c</itemPath>
+      <itemPath>../protocol_uart/uart.c</itemPath>
       <itemPath>../openocd.c</itemPath>
       <itemPath>../openocd_asm.s</itemPath>
       <itemPath>../messages_v3.s</itemPath>
@@ -105,7 +105,7 @@
       <itemPath>../binary_io.c</itemPath>
       <itemPath>../proc_menu.c</itemPath>
       <itemPath>../core.c</itemPath>
-      <itemPath>../uart2.c</itemPath>
+      <itemPath>../protocol_uart/uart2.c</itemPath>
       <itemPath>../aux_pin.c</itemPath>
     </logicalFolder>
   </logicalFolder>
