@@ -969,7 +969,7 @@ void serviceuser(void) {
         BPMSG1108;
         bp_write_formatted_integer(repeat);
         repeat++;
-        if (bp_current_protocol()->clock_pulses !=
+if (bp_current_protocol()->clock_pulses !=
             NULL) {
           /* The protocol can advance all the ticks in one call. */
           bp_current_protocol()->clock_pulses(
