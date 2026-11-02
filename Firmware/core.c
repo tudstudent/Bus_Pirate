@@ -63,7 +63,7 @@
 #endif /* BP_ENABLE_PIC_SUPPORT */
 
 #ifdef BP_ENABLE_DIO_SUPPORT
-#include "dio.h"
+#include "protocol_dio/dio.h"
 #endif /* BP_ENABLE_DIO_SUPPORT */
 
 #if defined(BP_ENABLE_RAW_2WIRE_SUPPORT) || defined(BP_ENABLE_RAW_3WIRE_SUPPORT)
@@ -420,7 +420,7 @@ static bus_pirate_protocol_t enabled_protocols[ENABLED_PROTOCOLS_COUNT] = {
      .read_bit = null_bit_read_callback,
      .periodic_update = null_bit_read_callback,
      .run_macro = null_macro_callback,
-     .setup_prepare = silent_null_operation_callback,
+     .setup_prepare = dio_setup_prepare,
      .setup_execute = silent_null_operation_callback,
      .cleanup = reset_mode_to_8_bits,
      .print_pins_state = hiz_print_pins_state,
