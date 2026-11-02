@@ -22,6 +22,8 @@
 #include "base.h"
 #include "binary_io.h"
 
+extern mode_configuration_t mode_configuration;
+
 /**
  * Bit 7 (0x80) indicates whether it is to set the pin state or the pin direction.
  */
@@ -29,6 +31,17 @@
 
 unsigned int dio_read(void) {
 	return bitbang_pin_state_get();
+}
+
+/**
+ * Prepares the DIO mode for operation.
+ *
+ * The mode is stateless: make sure a write-with-read flag leaked from a
+ * previous mode (e.g. the 3WIRE `{` command) cannot change the write
+ * replies (same class as the raw2wire setup).
+ */
+void dio_setup_prepare(void) {
+	mode_configuration.write_with_read = NO;
 }
 
 unsigned int dio_write(unsigned int value) {
