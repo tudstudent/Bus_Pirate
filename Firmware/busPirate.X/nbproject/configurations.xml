@@ -26,9 +26,9 @@
       <itemPath>../hd44780.h</itemPath>
       <itemPath>../spi.h</itemPath>
       <itemPath>../uart.h</itemPath>
-      <itemPath>../jtag.h</itemPath>
+      <itemPath>../protocol_jtag/jtag.h</itemPath>
       <itemPath>../smps.h</itemPath>
-      <itemPath>../openocd.h</itemPath>
+      <itemPath>../tool_openocd/openocd.h</itemPath>
       <itemPath>../messages_v3.h</itemPath>
       <itemPath>../messages_v4.h</itemPath>
       <itemPath>../messages.h</itemPath>
@@ -70,10 +70,10 @@
       <itemPath>../bitbang.c</itemPath>
       <itemPath>../dp_usb/cdc.c</itemPath>
       <itemPath>../dio.c</itemPath>
-      <itemPath>../jtag.c</itemPath>
-      <itemPath>../jtag/lenval.c</itemPath>
-      <itemPath>../jtag/micro.c</itemPath>
-      <itemPath>../jtag/ports.c</itemPath>
+      <itemPath>../protocol_jtag/jtag.c</itemPath>
+      <itemPath>../tool_xsvf/lenval.c</itemPath>
+      <itemPath>../tool_xsvf/micro.c</itemPath>
+      <itemPath>../tool_xsvf/ports.c</itemPath>
       <itemPath>../main.c</itemPath>
       <itemPath>../pc_at_keyboard.c</itemPath>
       <itemPath>../pic.c</itemPath>
@@ -88,8 +88,8 @@
       <itemPath>../hd44780.c</itemPath>
       <itemPath>../spi.c</itemPath>
       <itemPath>../uart.c</itemPath>
-      <itemPath>../openocd.c</itemPath>
-      <itemPath>../openocd_asm.s</itemPath>
+      <itemPath>../tool_openocd/openocd.c</itemPath>
+      <itemPath>../tool_openocd/openocd_asm.s</itemPath>
       <itemPath>../messages_v3.s</itemPath>
       <itemPath>../messages_v4.s</itemPath>
       <itemPath>../messages.c</itemPath>
@@ -513,7 +513,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../openocd_asm.s" ex="true" overriding="false">
+      <item path="../tool_openocd/openocd_asm.s" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
