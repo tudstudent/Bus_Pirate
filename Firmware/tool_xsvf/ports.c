@@ -12,7 +12,7 @@
 #ifdef BP_JTAG_XSVF_SUPPORT
 
 #include "ports.h"
-#include "../jtag.h"
+#include "../protocol_jtag/jtag.h"
 #define MAX_BUFFER 4096
 static unsigned char buf[MAX_BUFFER]; //buffer to hold incoming bytes
 static unsigned int bufBytes=0, bufPointer=0;
@@ -21,7 +21,7 @@ void xsvf_setup(void){
         bufBytes=0;
         JTAGTDI_TRIS=0;
         JTAGTCK_TRIS=0;
-        JTAGTD0_TRIS=1;
+        JTAGTDO_TRIS=1;
         JTAGTMS_TRIS=0;
 }
 
@@ -36,6 +36,7 @@ void readByte(unsigned char *data){
         unsigned char bh, bl;
 
         if(bufBytes==0){
+                do{
                 user_serial_transmit_character(0xff);
        //--- while(U1STAbits.URXDA == 0);  //--- dont use it as already in UART1RX => dead lock
                 bh=user_serial_read_byte();//get up to 255 bytes each time
@@ -56,6 +57,9 @@ void readByte(unsigned char *data){
                         bufBytes=MAX_BUFFER;
                 }
                 bufPointer=0;
+                /* a zero-length chunk is not data: re-request; it previously
+                   underflowed bufBytes (0-1 -> 0xFFFF) and served stale .bss. */
+                }while(bufBytes==0);
         }
 
         (*data)=buf[bufPointer];
@@ -67,6 +71,15 @@ unsigned char readTDOBit(){return JTAGTDO;}
 
 void waitTime(long microsec){
     volatile long i;
+
+    /* Coarse chunks first: one calibrated delay builtin per whole
+       millisecond instead of one per microsecond (the per-us loop
+       below adds its own overhead to every pass, so long XRUNTEST/
+       XWAIT waits used to run well past their nominal duration). */
+    while (microsec >= 1000){
+        bp_delay_us(1000);
+        microsec -= 1000;
+    }
 
     for ( i = 0; i < microsec; ++i ){
                 bp_delay_us(1);
