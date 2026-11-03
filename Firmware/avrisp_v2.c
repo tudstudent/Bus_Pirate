@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 #include "base.h"
+#include "capability_adc/adc.h"
 #include "avrisp_mkii.h"
 #include "avrisp_v2.h"
 #include "avrisp_xprog.h"
