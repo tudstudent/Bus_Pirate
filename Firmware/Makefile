@@ -71,12 +71,12 @@ BIN2HEX := $(TOOLCHAIN)bin2hex
 SOURCES := \
 	protocol_wire/1wire.c \
 	capability_aux/aux_pin.c \
-	avrisp_isp.c \
-	avrisp_mkii.c \
-	avrisp_nvm_pdi.c \
-	avrisp_nvm_tpi.c \
-	avrisp_v2.c \
-	avrisp_xprog.c \
+	programmer_avrisp/avrisp_isp.c \
+	programmer_avrisp/avrisp_mkii.c \
+	programmer_avrisp/avrisp_nvm_pdi.c \
+	programmer_avrisp/avrisp_nvm_tpi.c \
+	programmer_avrisp/avrisp_v2.c \
+	programmer_avrisp/avrisp_xprog.c \
 	base.c \
 	capability_adc/adc.c \
 	basic.c \
