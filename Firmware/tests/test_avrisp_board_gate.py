@@ -33,7 +33,7 @@ forced = subprocess.run([compiler, "-mcpu=24FJ64GA002", "-I", str(ROOT),
                          "-DBP_ENABLE_AVRISP_MKII_SUPPORT", "-E", "-P", "-x", "c", "-"],
                         input=probe, text=True, capture_output=True)
 assert forced.returncode != 0 and "requires Bus Pirate v4" in forced.stderr
-for source in ROOT.glob("avrisp_*.c"):
+for source in (ROOT / "programmer_avrisp").glob("avrisp_*.c"):
     obj = OUT / (source.stem+".o")
     subprocess.run([compiler, "-mcpu=24FJ64GA002", "-O1", "-I", str(ROOT),
                     "-c", str(source), "-o", str(obj)], check=True, capture_output=True)
