@@ -22,7 +22,7 @@ or send a letter to
 #include "../configuration.h"
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
-#include "../avrisp_mkii.h"
+#include "../programmer_avrisp/avrisp_mkii.h"
 #endif /* BP_ENABLE_AVRISP_MKII_SUPPORT */
 
 enum stopbits {
