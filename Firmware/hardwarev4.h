@@ -77,6 +77,10 @@
 #define BP_AUX0_LAT LATDbits.LATD5
 #define BP_AUX1_LAT LATDbits.LATD8
 #define BP_AUX2_LAT LATDbits.LATD0
+/* The MODE LED shares PORTB with the regulator-enable, PGD and USB-LED
+   outputs; drive it through its latch for the same read-modify-write
+   reason. */
+#define BP_LEDMODE_LAT LATBbits.LATB8
 #define BP_LEDMODE PORTBbits.RB8 // single MODE led on v2a
 #define BP_VREGEN PORTBbits.RB9  // single vreg enable pin on v2a
 #define BP_PULLUP PORTEbits.RE4  // Pull-up pin on V2a

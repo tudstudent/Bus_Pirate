@@ -69,6 +69,9 @@
 #define BP_MISO_LAT LATBbits.LATB7
 #define BP_CS_LAT LATBbits.LATB6
 #define BP_AUX0_LAT LATBbits.LATB10
+/* The MODE LED shares its port with the regulator-enable output; drive it
+   through its latch for the same read-modify-write reason. */
+#define BP_LEDMODE_LAT LATAbits.LATA1
 #define BP_LEDMODE PORTAbits.RA1 // single MODE led on v2a
 #define BP_VREGEN PORTAbits.RA0  // single vreg enable pin on v2a
 #define BP_PULLUP PORTBbits.RB11 // Pull-up pin on V2a
