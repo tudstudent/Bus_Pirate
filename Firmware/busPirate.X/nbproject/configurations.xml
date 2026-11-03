@@ -25,7 +25,7 @@
       <itemPath>../sump.h</itemPath>
       <itemPath>../dp_usb/usb_stack.h</itemPath>
       <itemPath>../onboard_eeprom.h</itemPath>
-      <itemPath>../i2c.h</itemPath>
+      <itemPath>../protocol_i2c/i2c.h</itemPath>
       <itemPath>../configuration.h</itemPath>
       <itemPath>../hd44780.h</itemPath>
       <itemPath>../spi.h</itemPath>
@@ -95,7 +95,7 @@
       <itemPath>../sump.c</itemPath>
       <itemPath>../dp_usb/usb_stack.c</itemPath>
       <itemPath>../onboard_eeprom.c</itemPath>
-      <itemPath>../i2c.c</itemPath>
+      <itemPath>../protocol_i2c/i2c.c</itemPath>
       <itemPath>../hd44780.c</itemPath>
       <itemPath>../spi.c</itemPath>
       <itemPath>../protocol_uart/uart.c</itemPath>

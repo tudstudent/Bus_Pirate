@@ -85,7 +85,7 @@ SOURCES := \
 	core.c \
 	protocol_dio/dio.c \
 	hd44780.c \
-	i2c.c \
+	protocol_i2c/i2c.c \
 	protocol_jtag/jtag.c \
 	tool_xsvf/lenval.c \
 	tool_xsvf/micro.c \

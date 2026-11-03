@@ -494,7 +494,7 @@ static bool bitbang_wait_for_clock_release(void) {
 
   /* Subsequent polls: direct pin reads, one tick apart. */
   for (waited = 0; waited < BB_CLK_STRETCH_TIMEOUT; waited++) {
-    delay_short_inline(1);
+delay_short_inline(1);
 
     if (BP_CLK == HIGH) {
       return true;

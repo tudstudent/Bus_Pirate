@@ -120,6 +120,25 @@ static const uint8_t HARDWARE_I2C_BRG_SPEEDS[] = {
 };
 
 /**
+ * Last valid index of HARDWARE_I2C_BRG_SPEEDS.  The software driver has
+ * one speed profile more than the hardware engine has rates (profile 4 is
+ * software-only).
+ */
+#define HARDWARE_I2C_BRG_MAX_INDEX 2
+
+/**
+ * Returns the hardware baud rate generator value for the current session
+ * speed, bounded to the table: the onboard-EEPROM macro keeps the
+ * session speed, which can come from a software driver profile that has
+ * no hardware rate.
+ */
+static uint8_t hardware_i2c_brg(void) {
+  return HARDWARE_I2C_BRG_SPEEDS[mode_configuration.speed > HARDWARE_I2C_BRG_MAX_INDEX
+                                     ? HARDWARE_I2C_BRG_MAX_INDEX
+                                     : mode_configuration.speed];
+}
+
+/**
  * Performs hardware initialisation on the chosen hardware I2C interface.
  */
 static void hardware_i2c_setup(void);
@@ -316,6 +335,15 @@ void i2c_setup_prepare(void) {
   } else {
     speed = 0;
   }
+
+  /*
+   * The engine has three rates (100 kHz, 400 kHz, 1 MHz); profile 4 is
+   * for the software driver only.  Ask again rather than silently
+   * accepting a rate the engine does not offer.
+   */
+  if ((i2c_state.mode == I2C_TYPE_HARDWARE) && (speed > 3)) {
+    speed = 0;
+  }
 #endif /* BP_I2C_USE_HW_BUS */
 
   if ((speed > 0) && (speed <= 4)) {
@@ -359,13 +387,21 @@ void i2c_setup_prepare(void) {
 
   mode_configuration.high_impedance = ON;
 
+#ifdef BUSPIRATEV4
+  /*
+   * A new session starts on the external bus; the onboard-EEPROM macro
+   * must not leak its I2C1 routing into the next session.
+   */
+  i2c_state.to_eeprom = false;
+#endif /* BUSPIRATEV4 */
+
   /*
    * Software I2C takes its clock timing from the bit-bang delay profile;
    * apply it here as well because the interactive flow only runs
-   * setup_execute() on the first power-on request (`W`), so a mode that is
-   * never powered would otherwise clock with a stale profile.  The pins
-   * are still configured by setup_execute() (hardware mode does its own
-   * setup there).
+   * setup_execute() on the first power-on request (`W`), so a mode that
+   * is never powered would otherwise clock with a stale profile.  The
+   * pins are still configured by setup_execute() (hardware mode does its
+   * own setup there).
    */
   if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
     bitbang_setup(2, mode_configuration.speed);
@@ -526,7 +562,7 @@ void i2c_macro(unsigned int c) {
     I2C1MSK = 0;
 
     /* Set the I2C baud rate generator speed. */
-    I2C1BRG = HARDWARE_I2C_BRG_SPEEDS[mode_configuration.speed];
+    I2C1BRG = hardware_i2c_brg();
 
     /* Enable the internal I2C module. */
     I2C1CONbits.I2CEN = ON;
@@ -747,7 +783,7 @@ void hardware_i2c_setup(void) {
   I2C3MSK = 0;
 
   /* Set the I2C baud rate generator speed. */
-  I2C3BRG = HARDWARE_I2C_BRG_SPEEDS[mode_configuration.speed];
+  I2C3BRG = hardware_i2c_brg();
 
   /* Enable the I2C module. */
   I2C3CONbits.I2CEN = ON;
@@ -761,7 +797,7 @@ void hardware_i2c_setup(void) {
   I2C1MSK = 0;
 
   /* Set the I2C baud rate generator speed. */
-  I2C1BRG = HARDWARE_I2C_BRG_SPEEDS[mode_configuration.speed];
+  I2C1BRG = hardware_i2c_brg();
 
   /*
    * I2C1CON: I2C1 CONTROL REGISTER
@@ -953,7 +989,20 @@ rawI2C mode:
 
 void binary_io_enter_i2c_mode(void) {
   static unsigned char inByte, rawCommand, i;
-  unsigned int fw, fr;
+  unsigned int fr;
+
+  /*
+   * The byte transport below (i2c_write()/i2c_read() ->
+   * bitbang_write_value()/bitbang_read_value()) carries
+   * mode_configuration.numbits bits per byte.  A width left over from
+   * another mode - e.g. an interactive ;16 in a raw mode, whose exit path
+   * does not run the mode cleanup - would turn every byte into a 16-bit
+   * transfer: the wire carries a leading 0x00 byte and every slave NAKs
+   * the address.  Pin the byte width at entry, the same way the raw-wire
+   * binary handler in binary_io.c does.
+   */
+  mode_configuration.numbits = 8;
+  mode_configuration.int16 = NO;
 
   /*
    * The byte transport below (i2c_write()/i2c_read() ->
@@ -1074,7 +1123,8 @@ void binary_io_enter_i2c_mode(void) {
           break;
 
         default:
-          fw = 0;
+          /* The sub-command is unknown: report failure. */
+          fr = 0;
           break;
         }
 
