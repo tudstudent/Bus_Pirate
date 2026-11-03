@@ -185,27 +185,7 @@ void delay_long(uint32_t microseconds);
  */
 void bp_reset_board_state(void);
 
-/**
- * @brief Reads a value from the ADC on the given channel.
- *
- * @warning this function assumes the ADC is already enabled, and will not turn
- *          it on or off.
- *
- * @param[in] channel the channel to read data from.
- * @return the value read from the channel.
- */
-uint16_t bp_read_adc(const uint16_t channel);
 
-/**
- * @brief Takes one single ADC measurement and prints it to the serial port.
- */
-void bp_adc_probe(void);
-
-/**
- * @brief Takes ADC measurements and prints them to the serial port until a byte
- * is sent to the serial port.
- */
-void bp_adc_continuous_probe(void);
 
 /**
  * @brief Prints the given value to the user terminal according to the format
