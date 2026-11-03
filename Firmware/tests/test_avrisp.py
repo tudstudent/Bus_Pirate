@@ -12,6 +12,12 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build" / "avrisp-tests"
 OUT.mkdir(parents=True, exist_ok=True)
+# The sources include the ADC capability header for bp_read_adc(); in this
+# harness the mock base.h provides it, so satisfy the include with a stub.
+adc_dir = OUT / "capability_adc"
+adc_dir.mkdir(parents=True, exist_ok=True)
+(adc_dir / "adc.h").write_text(
+    "/* mock: the ADC primitives are provided by the mocked base.h. */\n")
 for source in (ROOT / "programmer_avrisp").glob("avrisp_*"):
     text = source.read_text()
     if source.suffix == ".c":
