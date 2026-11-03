@@ -23,6 +23,7 @@
 
 #include "base.h"
 #include "core.h"
+#include "aux_pin.h"
 
 /**
  * @brief Prefix string for hexadecimal values in human-readable form.
@@ -177,8 +178,8 @@ void bp_reset_board_state(void) {
   eeprom_initialize();
 #endif /* BUSPIRATEv4 */
 
-  /* Detach source from the currently-set AUX pin. */
-  BP_AUX_RPOUT = OFF;
+  /* Detach the AUX output source and clear its mode flag. */
+  bp_aux_pin_reset_state();
 
   bus_pirate_configuration.bus_mode = BP_HIZ;
   clear_mode_configuration();

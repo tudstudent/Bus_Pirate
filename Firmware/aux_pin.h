@@ -131,6 +131,15 @@ bool bp_aux_pin_state_get(void);
 void bp_aux_pin_set_change_notification(const bool state);
 
 /**
+ * @brief Detaches the AUX output source and clears the matching mode flag.
+ *
+ * The board reset path uses this, so a PWM or servo mode flag cannot
+ * outlive its detached output source and make the next generator command
+ * act as 'disable' instead of starting.
+ */
+void bp_aux_pin_reset_state(void);
+
+/**
  * @brief Starts the setup process for driving a servomotor.
  */
 void bp_servo_setup(void);
