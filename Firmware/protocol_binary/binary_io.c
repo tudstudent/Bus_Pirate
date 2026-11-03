@@ -19,13 +19,14 @@
 
 /* Binary access modes for Bus Pirate scripting */
 
-#include "aux_pin.h"
+#include "capability_aux/aux_pin.h"
 #include "base.h"
+#include "capability_adc/adc.h"
 #include "binary_io.h"
 #include "bitbang.h"
 #include "configuration.h"
 #include "core.h"
-#include "selftest.h"
+#include "capability_selftest/selftest.h"
 
 #ifdef BP_ENABLE_SPI_SUPPORT
 #include "spi.h"
@@ -55,7 +56,7 @@
 #endif /* BP_ENABLE_JTAG_SUPPORT */
 
 #ifdef BP_ENABLE_SMPS_SUPPORT
-#include "smps.h"
+#include "capability_smps/smps.h"
 #endif /* BP_ENABLE_SMPS_SUPPORT */
 
 #ifdef BP_ENABLE_AVRISP_MKII_SUPPORT
@@ -601,11 +602,11 @@ uint8_t bitbang_pin_state_set(const uint8_t state_mask) {
   bp_set_voltage_regulator_state((state_mask & 0b01000000) ? ON : OFF);
   bp_set_pullup_state((state_mask & 0b00100000) ? ON : OFF);
 
-  BP_AUX0 = (state_mask & 0b00010000) ? HIGH : LOW;
-  BP_MOSI = (state_mask & 0b00001000) ? HIGH : LOW;
-  BP_CLK = (state_mask & 0b00000100) ? HIGH : LOW;
-  BP_MISO = (state_mask & 0b00000010) ? HIGH : LOW;
-  BP_CS = (state_mask & 0b00000001) ? HIGH : LOW;
+  BP_AUX0_LAT = (state_mask & 0b00010000) ? HIGH : LOW;
+  BP_MOSI_LAT = (state_mask & 0b00001000) ? HIGH : LOW;
+  BP_CLK_LAT = (state_mask & 0b00000100) ? HIGH : LOW;
+  BP_MISO_LAT = (state_mask & 0b00000010) ? HIGH : LOW;
+  BP_CS_LAT = (state_mask & 0b00000001) ? HIGH : LOW;
 
   /* Wait a bit. */
 
@@ -650,7 +651,7 @@ void bp_binary_io_peripherals_set(unsigned char inByte) {
   bp_set_pullup_state((inByte & 0b00000100) == 0b00000100);
 
   BP_AUX0_DIR = OUTPUT;
-  BP_AUX0 = (inByte & 0b00000010) ? ON : OFF;
+  BP_AUX0_LAT = (inByte & 0b00000010) ? ON : OFF;
 
   // CS pin, follows HiZ setting
   if (inByte & 0b1) {
@@ -978,7 +979,7 @@ bool handle_wire_generic_command(const wire_generic_command command) {
  *
  * The change notification flag latches an edge in between polls, so the
  * tick only bounds how late the reply can be; an edge is never missed.
- * One microsecond keeps the loop at a flag test plus one delay per pass,
+* One microsecond keeps the loop at a flag test plus one delay per pass,
  * so a caught edge is reported within a few microseconds instead of up to
  * the old 50 us interval.
  */
@@ -1010,13 +1011,13 @@ void handle_wait_command(const uint8_t command) {
   bp_aux_pin_set_change_notification(ON);
   IFS1bits.CNIF = OFF;
 
-  bool level = bp_aux_pin_read();
+  bool level = bp_aux_pin_state_get();
   bool edge_seen = NO;
 
   /*
    * Timeout accounting on TMR1 directly (0.5 us ticks, 16 bits, so it
    * wraps every 32.8 ms): deltas are accumulated so any timeout up to the
-   * protocol maximum stays exact, and the loop needs no wrapper calls.
+* protocol maximum stays exact, and the loop needs no wrapper calls.
    */
   const uint32_t timeout_ticks = (uint32_t)timeout_ms * 2000;
   uint16_t last_ticks = TMR1;
@@ -1026,7 +1027,7 @@ void handle_wait_command(const uint8_t command) {
     if (IFS1bits.CNIF) {
       IFS1bits.CNIF = OFF;
 
-      const bool next_level = bp_aux_pin_read();
+      const bool next_level = bp_aux_pin_state_get();
 
       if (next_level != level) {
         const bool rising_edge = next_level;
@@ -1047,7 +1048,7 @@ void handle_wait_command(const uint8_t command) {
     last_ticks = now_ticks;
 
     if (elapsed_ticks >= timeout_ticks) {
-      level = bp_aux_pin_read();
+level = bp_aux_pin_state_get();
       break;
     }
 
@@ -1331,6 +1332,14 @@ void handle_pic_command_write_and_read_commands(void) {
   }
 }
 
+/*
+ * SMPS request encoding (intended, per the module review): the low nibble
+ * of a request carries the 12-bit output-voltage high bits, with 0x0 and
+ * 0x1 reserved for the fixed GET/STOP requests.  Start requests therefore
+ * begin at 0xF2 (= 0x2000, the SMPS board's minimum), so 0xF0/0xF1 can
+ * never collide with a start value and the 0x0000..0x1FFF range is
+ * unreachable by design.
+ */
 void handle_smps_command(const smps_command command) {
 #if defined(BP_ENABLE_SMPS_SUPPORT)
   switch (command) {

@@ -106,6 +106,18 @@ void bp_aux_pin_set_low(void);
 bool bp_aux_pin_read(void);
 
 /**
+ * @brief Returns the state of the currently chosen AUX pin without changing
+ * the pin's direction.
+ *
+ * Unlike bp_aux_pin_read(), this leaves the pin exactly as it is; the
+ * wait-for-edge command uses it so a caller's output direction survives the
+ * wait.
+ *
+ * @return `HIGH` or `LOW` according to the chosen AUX pin state.
+ */
+bool bp_aux_pin_state_get(void);
+
+/**
  * @brief Enables or disables change notification on the currently chosen AUX
  * pin.
  *
@@ -117,6 +129,15 @@ bool bp_aux_pin_read(void);
  * disable it.
  */
 void bp_aux_pin_set_change_notification(const bool state);
+
+/**
+ * @brief Detaches the AUX output source and clears the matching mode flag.
+ *
+ * The board reset path uses this, so a PWM or servo mode flag cannot
+ * outlive its detached output source and make the next generator command
+ * act as 'disable' instead of starting.
+ */
+void bp_aux_pin_reset_state(void);
 
 /**
  * @brief Starts the setup process for driving a servomotor.

@@ -70,7 +70,7 @@ BIN2HEX := $(TOOLCHAIN)bin2hex
 
 SOURCES := \
 	protocol_wire/1wire.c \
-	aux_pin.c \
+	capability_aux/aux_pin.c \
 	avrisp_isp.c \
 	avrisp_mkii.c \
 	avrisp_nvm_pdi.c \
@@ -78,27 +78,28 @@ SOURCES := \
 	avrisp_v2.c \
 	avrisp_xprog.c \
 	base.c \
+	capability_adc/adc.c \
 	basic.c \
-	binary_io.c \
+	protocol_binary/binary_io.c \
 	bitbang.c \
 	core.c \
-	dio.c \
+	protocol_dio/dio.c \
 	hd44780.c \
 	i2c.c \
-	jtag.c \
-	jtag/lenval.c \
-	jtag/micro.c \
-	jtag/ports.c \
+	protocol_jtag/jtag.c \
+	tool_xsvf/lenval.c \
+	tool_xsvf/micro.c \
+	tool_xsvf/ports.c \
 	main.c \
 	messages.c \
-	openocd.c \
+	tool_openocd/openocd.c \
 	pc_at_keyboard.c \
 	pic.c \
 	proc_menu.c \
 	protocol_wire/raw2wire.c \
 	protocol_wire/raw3wire.c \
-	selftest.c \
-	smps.c \
+	capability_selftest/selftest.c \
+	capability_smps/smps.c \
 	spi.c \
 	sump.c \
 	protocol_uart/uart.c \
@@ -113,7 +114,7 @@ SOURCES += \
 else
 SOURCES += \
 	messages_v3.s \
-	openocd_asm.s
+	tool_openocd/openocd_asm.s
 endif
 
 # Object files live in a per-target directory: the v3 and v4 builds compile
