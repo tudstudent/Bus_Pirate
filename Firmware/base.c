@@ -23,7 +23,7 @@
 
 #include "base.h"
 #include "core.h"
-#include "aux_pin.h"
+#include "capability_aux/aux_pin.h"
 
 /**
  * @brief Prefix string for hexadecimal values in human-readable form.
@@ -230,68 +230,7 @@ void bp_reset_board_state(void) {
   AD1CON2 = 0x0000;
 }
 
-uint16_t bp_read_adc(const uint16_t channel) {
 
-  /* Set channel. */
-  AD1CHS = channel;
-
-  /* Trigger sample. */
-  AD1CON1bits.SAMP = ON;
-
-  /* Clear "done" flag. */
-  AD1CON1bits.DONE = OFF;
-
-  /* Wait for conversion to finish. */
-  while (AD1CON1bits.DONE == OFF) {
-  }
-
-  /* Return value. */
-  return ADC1BUF0;
-}
-
-void bp_adc_probe(void) {
-  /* Turn the ADC on. */
-  bp_enable_adc();
-
-  /* Perform the measurement. */
-  bp_write_voltage(bp_read_adc(BP_ADC_PROBE));
-
-  /* Turn the ADC off. */
-  bp_disable_adc();
-}
-
-void bp_adc_continuous_probe(void) {
-  uint16_t measurement;
-
-  MSG_ADC_VOLTMETER_MODE;
-  MSG_ANY_KEY_TO_EXIT_PROMPT;
-  MSG_ADC_VOLTAGE_PROBE_HEADER;
-  bp_write_voltage(0);
-  MSG_VOLTAGE_UNIT;
-
-  /* Perform ADC probes until a character is sent to the serial port. */
-  while (!user_serial_ready_to_read()) {
-    /* Turn the ADC on. */
-    AD1CON1bits.ADON = ON;
-
-    /* Perform the measurement. */
-    measurement = bp_read_adc(BP_ADC_PROBE);
-
-    /* Turn the ADC off. */
-    AD1CON1bits.ADON = OFF;
-
-    /* Erase previous measurement. */
-    bp_write_string("\x08\x08\x08\x08\x08");
-
-    /* Print new measurement. */
-    bp_write_voltage(measurement);
-    MSG_VOLTAGE_UNIT;
-  }
-
-  /* Flush the incoming serial buffer. */
-  user_serial_read_byte();
-  bpBR;
-}
 
 void bp_write_formatted_integer(const uint16_t value) {
   uint16_t integer;

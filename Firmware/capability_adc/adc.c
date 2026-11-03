@@ -1,0 +1,89 @@
+/*
+ * This file is part of the Bus Pirate project
+ * (http://code.google.com/p/the-bus-pirate/).
+ *
+ * Written and maintained by the Bus Pirate project.
+ *
+ * To the extent possible under law, the project has waived all copyright and
+ * related or neighboring rights to Bus Pirate. This work is published from
+ * United States.
+ *
+ * For details see: http://creativecommons.org/publicdomain/zero/1.0/
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.
+ */
+
+/**
+ * @file adc.c
+ *
+ * @brief ADC capability implementation (split from base.c): the read
+ * primitive and the terminal probe front ends.
+ */
+
+#include "adc.h"
+
+#include "base.h"
+
+uint16_t bp_read_adc(const uint16_t channel) {
+  /* Set channel. */
+  AD1CHS = channel;
+
+  /* Trigger sample. */
+  AD1CON1bits.SAMP = ON;
+
+  /* Clear "done" flag. */
+  AD1CON1bits.DONE = OFF;
+
+  /* Wait for conversion to finish. */
+  while (AD1CON1bits.DONE == OFF) {
+  }
+
+  /* Return value. */
+  return ADC1BUF0;
+}
+
+void bp_adc_probe(void) {
+  /* Turn the ADC on. */
+  bp_enable_adc();
+
+  /* Perform the measurement. */
+  bp_write_voltage(bp_read_adc(BP_ADC_PROBE));
+
+  /* Turn the ADC off. */
+  bp_disable_adc();
+}
+
+void bp_adc_continuous_probe(void) {
+  uint16_t measurement;
+
+  MSG_ADC_VOLTMETER_MODE;
+  MSG_ANY_KEY_TO_EXIT_PROMPT;
+  MSG_ADC_VOLTAGE_PROBE_HEADER;
+  bp_write_voltage(0);
+  MSG_VOLTAGE_UNIT;
+
+  /* Perform ADC probes until a character is sent to the serial port. */
+  while (!user_serial_ready_to_read()) {
+    /* Turn the ADC on. */
+    AD1CON1bits.ADON = ON;
+
+    /* Perform the measurement. */
+    measurement = bp_read_adc(BP_ADC_PROBE);
+
+    /* Turn the ADC off. */
+    AD1CON1bits.ADON = OFF;
+
+    /* Erase previous measurement. */
+    bp_write_string("\x08\x08\x08\x08\x08");
+
+    /* Print new measurement. */
+    bp_write_voltage(measurement);
+    MSG_VOLTAGE_UNIT;
+  }
+
+  /* Flush the incoming serial buffer. */
+  user_serial_read_byte();
+  bpBR;
+}
