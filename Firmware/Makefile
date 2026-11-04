@@ -109,7 +109,7 @@ ifeq ($(BP_VERSION),V4)
 SOURCES += \
 	core_usb/cdc.c \
 	core_usb/usb_stack.c \
-	onboard_eeprom.c \
+	core_eeprom/onboard_eeprom.c \
 	core_messages/messages_v4.s
 else
 SOURCES += \
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system -Icore_bitbang -Icore_messages \
+	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
