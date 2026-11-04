@@ -16,7 +16,7 @@ or send a letter to
 
 // JTR v0.2a
 
-#include "../dp_usb/picusb.h"     // JTR combined PIC_18F and PIC_24F header. This is the only included header.
+#include "picusb.h"     // JTR combined PIC_18F and PIC_24F header. This is the only included header.
 
 #define USB_TOKEN_Mask  0b00111100
 #define USB_TOKEN_OUT   0b00000100
@@ -68,7 +68,7 @@ or send a letter to
 #define USB_bmRequestType_Standard              0b00000000
 #define USB_bmRequestType_Class                 0b00100000
 #define USB_bmRequestType_Vendor                0b01000000
-#define USB_bmRequestType_RecipientMask         0b00000011
+#define USB_bmRequestType_RecipientMask         0b00011111
 #define USB_bmRequestType_Device                0b00000000
 #define USB_bmRequestType_Interface             0b00000001
 #define USB_bmRequestType_Endpoint              0b00000010
@@ -132,6 +132,7 @@ typedef struct USB_DEVICE_REQUEST {
 } usb_device_request;
 
 extern BYTE trn_status;
+extern volatile BYTE usb_device_state;
 extern BDentry *EP0_Outbdp, *EP0_Inbdp;
 
 void usb_init(ROMPTR const BYTE *dev_descriptor,

@@ -107,8 +107,8 @@ SOURCES := \
 
 ifeq ($(BP_VERSION),V4)
 SOURCES += \
-	dp_usb/cdc.c \
-	dp_usb/usb_stack.c \
+	core_usb/cdc.c \
+	core_usb/usb_stack.c \
 	onboard_eeprom.c \
 	messages_v4.s
 else

@@ -26,7 +26,7 @@
 #include "capability_aux/aux_pin.h"
 
 #ifdef BUSPIRATEV4
-#include "dp_usb/cdc.h"
+#include "core_usb/cdc.h"
 #endif /* BUSPIRATEV4 */
 
 /**
@@ -40,11 +40,6 @@ static const uint8_t HEX_PREFIX[] = {'0', 'x'};
 static const unsigned char HEX_ASCII_TABLE[] = {'0', '1', '2', '3', '4', '5',
                                                 '6', '7', '8', '9', 'A', 'B',
                                                 'C', 'D', 'E', 'F'};
-
-#if defined(BUSPIRATEV4)
-extern volatile BYTE cdc_In_len;
-extern volatile BYTE cdc_Out_len;
-#endif /* BUSPIRATEV4 */
 
 extern bus_pirate_configuration_t bus_pirate_configuration;
 extern mode_configuration_t mode_configuration;
@@ -944,8 +939,6 @@ void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void) {
 #endif /* BUSPIRATEV3 */
 
 #if defined(BUSPIRATEV4)
-
-extern BDentry *CDC_Outbdp, *CDC_Inbdp;
 
 void user_serial_transmit_character(const char character) {
   if (bus_pirate_configuration.quiet) {

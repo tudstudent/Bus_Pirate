@@ -96,6 +96,7 @@ entries common to both PIC families.
 #define USB_DIR_IN      1
 #define USB_PP_EVEN     0
 #define USB_PP_ODD      1
+#define NO_PINGPONG     0
 
 
 /* PIC DEFINES SPECIFIC TO PIC18 */
@@ -340,7 +341,7 @@ typedef struct BDENTRY {
 // #define USB_EP_BULK                  (1)
 // #define      USB_EP_ISOCHRONOUS      (2)
 
-typedef unsigned int usb_uep_t; // JTR PIC24 fixup potentially ?? changed from char.
+typedef volatile unsigned int usb_uep_t;
 // See http://dangerousprototypes.com/forum/viewtopic.php?f=39&t=1651&start=150#p17703
 
 // However the stack as modified by JTR does not actually use it. Then again it might as it is tested and works.
@@ -408,7 +409,7 @@ typedef unsigned int usb_uep_t; // JTR PIC24 fixup potentially ?? changed from c
 #define EnableUsb()                             while(!U1CONbits.USBEN){U1CONbits.USBEN = 1;} //                U1CONbits.USBEN = 1
 #define SignalResume()                          do {U1CONbits.RESUME = 1; delay_ms(10); U1CONbits.RESUME = 0;} while(0)
 #define SuspendUsb()                            U1PWRCbits.USUSPND = 1
-#define WakeupUsb()                             do {U1PWRCbits.USUSPND = 0; while(USB_RESUME_FLAG){USB_RESUME_FLAG = 0;}} while(0)
+#define WakeupUsb()                             do {U1PWRCbits.USUSPND = 0; ClearUsbInterruptFlag(USB_RESUM);} while(0)
 
 
 /* UADDR */
@@ -424,7 +425,7 @@ typedef unsigned int usb_uep_t; // JTR PIC24 fixup potentially ?? changed from c
 #define USB_STAT2EP(x)                          ((x>>4)&0x0F) //((x>>3)&0x0F)   JTR PIC24 fixups
 #define USB_STAT2DIR(x)                         ((x>>3)&0x01) //((x>>2)&0x01)   ""
 #define USB_STAT2ADDR(x)                        ((x>>3)&0x1F) //((x>>2)&0x1F)   ""
-#define USB_STAT2PPI(x)                         ((x>>2 &0x01) //((x>>1)&0x01)   ""
+#define USB_STAT2PPI(x)                         (((x)>>2)&0x01)
 #define DIRBIT 0x8      // JTR add PIC24 fixup as the mask is 0x4 for the PIC18
 
 
@@ -519,7 +520,7 @@ typedef unsigned int usb_uep_t; // JTR PIC24 fixup potentially ?? changed from c
 #define ARCH_memcpy memcpy
 
 typedef struct BDENTRY {
-    unsigned char BDCNT; // JTR PIC24 fixup Note that the endianness is swapped from the PIC18
+    volatile unsigned char BDCNT; // SIE updates the count before returning ownership.
                          // This is probably what had people hitting their heads!
     volatile unsigned char BDSTAT;
     unsigned char *BDADDR;

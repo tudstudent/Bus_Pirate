@@ -16,7 +16,7 @@ Influence and inspiration taken from http://pe.ece.olin.edu/ece/projects.html
 // JTR v0.2a Jan 26th 2012
 
 
-#include "../dp_usb/usb_stack_globals.h"     // USB stack only defines Not function related.
+#include "usb_stack_globals.h"     // USB stack only defines Not function related.
 
 #if USB_EP0_BUFFER_SIZE == 8u
 #elif USB_EP0_BUFFER_SIZE == 16u
@@ -27,6 +27,7 @@ Influence and inspiration taken from http://pe.ece.olin.edu/ece/projects.html
 #endif
 
 static void usb_send_rom(void);
+static void usb_start_rom_reply(unsigned int requested);
 
 ROMPTR const BYTE *usb_device_descriptor;
 ROMPTR const BYTE *usb_config_descriptor;
@@ -38,6 +39,7 @@ usb_handler_t class_setup_handler, vendor_setup_handler;
 
 
 usb_ep_t endpoints[MAX_CHIP_EP]; // JTR change. MAX_CHIP_EP is the number of hardware endpoints on the silicon. See picusb.h
+static BYTE usb_halt_saved[2 + 2 * MAX_EPNUM_USED];
 
 /* Allocate buffers for buffer description table and the actual buffers */
 // CvD: linkscript puts it in the right memory location
@@ -83,9 +85,9 @@ volatile BYTE usb_device_state;
 BYTE usb_addr_pending;
 BYTE trn_status; // Global since it is needed everywere
 BDentry *EP0_Outbdp, *EP0_Inbdp; // Dito
-BYTE IsSuspended = 0;
 ROMPTR const BYTE *usb_rom_ptr;
 size_t usb_rom_len;
+static BYTE usb_rom_need_zlp;
 volatile BYTE usbrequesterrorflag;
 
 void usb_init(ROMPTR const BYTE *device_descriptor,
@@ -128,6 +130,7 @@ void usb_handle_reset(void) {
     } while (USB_TRANSACTION_FLAG);
 
     ClearUSBtoDefault();
+    usb_device_state = DEFAULT_STATE;
     EnablePacketTransfer();
 }
 
@@ -149,6 +152,7 @@ void ClearUSBtoDefault(void) {
 
     for (i = 0; i < (2 + 2 * MAX_EPNUM_USED); i++) {
         usb_bdt[i].BDSTAT = 0;
+        usb_halt_saved[i] = 0;
     }
 
     USB_UEP0 = USB_EP_CONTROL; // Configure Only ep0 At this point.
@@ -240,9 +244,17 @@ void usb_handle_transaction(void) {
 
 void usb_handle_setup(void) {
 
+    /* A SETUP aborts the previous control transfer (USB 2.0 8.5.3). */
+    usb_unset_in_handler(0);
+    usb_unset_out_handler(0);
+    usbrequesterrorflag = 0;
     EP0_Inbdp->BDSTAT = DTSEN; // Reclaim reply buffer
-
-    EnablePacketTransfer(); // JTR this is placed here to overcome a errate issue with early PIC18 USB pics.
+    USB_UEP0 &= ~USB_UEP_EPSTALL;
+    if (EP0_Outbdp->BDCNT != 8) {
+        usb_RequestError();
+        EnablePacketTransfer();
+        return;
+    }
 
     switch (EP0_Outbdp->BDADDR[USB_bmRequestType] & USB_bmRequestType_TypeMask) {
         case USB_bmRequestType_Standard:
@@ -262,32 +274,49 @@ void usb_handle_setup(void) {
             break;
         case USB_bmRequestType_Class:
             if (class_setup_handler) class_setup_handler();
+            else usb_RequestError();
             break;
         case USB_bmRequestType_Vendor:
 			//ROBOTS FIX: http://dangerousprototypes.com/forum/viewtopic.php?f=39&t=3849&view=unread#unread
 			// did call class_setup_handler();
             if (vendor_setup_handler) vendor_setup_handler();
+            else usb_RequestError();
             break;
         default:
             usb_RequestError();
     }
     /* Prepare endpoint for new reception */
 
-    EP0_Outbdp->BDCNT = USB_EP0_BUFFER_SIZE; // Size  of EP0, should always be ep0?
-
-    // JTR, is the next OUT transfer to be a setup packet (DAT0) or a DATA packet (DAT1)?
-    // note that this is not an entirely robust way of doing things. See the microchip stack for
-    // further comments and a better system as this does not account for errors and retries
-    // and it results in the SIE not accepting the final out ZLP status packet for IN transfers
-    // with a data stage. However it works but it is not anything to be proud of...
-
-    EP0_Outbdp->BDSTAT = (!(EP0_Outbdp->BDADDR[USB_bmRequestType] & USB_bmRequestType_PhaseMask) &&
-            (EP0_Outbdp->BDADDR[USB_wLength] || EP0_Outbdp->BDADDR[USB_wLengthHigh])) ? UOWN + DTS + DTSEN : UOWN + DTSEN;
+    if (!usbrequesterrorflag) {
+        EP0_Outbdp->BDCNT = USB_EP0_BUFFER_SIZE;
+        /* DATA or status OUT starts at DATA1; a SETUP always resynchronizes. */
+        EP0_Outbdp->BDSTAT = UOWN | DTSEN |
+                ((EP0_Outbdp->BDADDR[USB_wLength] || EP0_Outbdp->BDADDR[USB_wLengthHigh]) ? DTS : 0);
+    }
+    /* DS39897C p.226: keep PKTDIS set until all control BDs are ready. */
+    EnablePacketTransfer();
 }
 
 void usb_handle_StandardDeviceRequest(BDentry *bdp) {
     BYTE *packet = bdp->BDADDR;
     int i;
+
+    if ((packet[USB_bRequest] == USB_REQUEST_GET_STATUS ||
+            packet[USB_bRequest] == USB_REQUEST_GET_CONFIGURATION) &&
+            (packet[USB_bmRequestType] != 0x80 || packet[USB_wValue] || packet[USB_wValueHigh] ||
+             packet[USB_wIndex] || packet[USB_wIndexHigh] || packet[USB_wLengthHigh] ||
+             packet[USB_wLength] != (packet[USB_bRequest] == USB_REQUEST_GET_STATUS ? 2 : 1))) {
+        usb_RequestError();
+        return;
+    }
+    if ((packet[USB_bRequest] == USB_REQUEST_SET_ADDRESS ||
+            packet[USB_bRequest] == USB_REQUEST_SET_FEATURE ||
+            packet[USB_bRequest] == USB_REQUEST_CLEAR_FEATURE) &&
+            (packet[USB_bmRequestType] != 0 || packet[USB_wValueHigh] ||
+             packet[USB_wIndex] || packet[USB_wIndexHigh] || packet[USB_wLength] || packet[USB_wLengthHigh])) {
+        usb_RequestError();
+        return;
+    }
 
     switch (packet[USB_bRequest]) {
         case USB_REQUEST_GET_STATUS:
@@ -296,14 +325,14 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
             usb_ack_dat1(2);
             break;
         case USB_REQUEST_CLEAR_FEATURE:
-            if (0x01u == packet[USB_wValue]) { // TODO: Remove magic (REMOTE_WAKEUP_FEATURE)
+            if (0x01u == packet[USB_wValue] && (usb_config_descriptor[7] & 0x20)) {
                 usb_device_status &= ~0x0002;
                 usb_ack_dat1(0);
             } else
                 usb_RequestError();
             break;
         case USB_REQUEST_SET_FEATURE:
-            if (0x01u == packet[USB_wValue]) { // TODO: Remove magic (REMOTE_WAKEUP_FEATURE)
+            if (0x01u == packet[USB_wValue] && (usb_config_descriptor[7] & 0x20)) {
                 usb_device_status |= 0x0002;
                 usb_ack_dat1(0);
             } else
@@ -320,6 +349,10 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
 
 
         case USB_REQUEST_GET_DESCRIPTOR:
+            if (packet[USB_bmRequestType] != 0x80) {
+                usb_RequestError();
+                break;
+            }
             switch (packet[USB_bDescriptorType]) {
                 case USB_DEVICE_DESCRIPTOR_TYPE: // There is only every one in pratice.
                     usb_rom_ptr = usb_device_descriptor;
@@ -365,8 +398,7 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
                     flag_usb_RequestError();
             }
             if (0 == usbrequesterrorflag) {
-                usb_send_rom(); // Send first part of packet right away, the rest is handled by the EP0 IN handler.
-                usb_set_in_handler(0, usb_send_rom);
+                usb_start_rom_reply(packet[USB_wLength] | ((unsigned int)packet[USB_wLengthHigh] << 8));
             } else {
                 usb_RequestError();
             }
@@ -378,7 +410,10 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
             break;
 
         case USB_REQUEST_SET_CONFIGURATION:
-            if (USB_NUM_CONFIGURATIONS >= packet[USB_wValue]) {
+            if (packet[USB_bmRequestType] == 0 && !packet[USB_wValueHigh] &&
+                    !packet[USB_wIndex] && !packet[USB_wIndexHigh] &&
+                    !packet[USB_wLength] && !packet[USB_wLengthHigh] &&
+                    USB_NUM_CONFIGURATIONS >= packet[USB_wValue]) {
                 // TODO: Support multiple configurations
                 /* Configure endpoints (USB_UEPn - registers) */
                 usb_current_cfg = packet[USB_wValue];
@@ -392,6 +427,14 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
                     user_configured_init();
                 } else {
                     usb_device_state = ADDRESS_STATE;
+                    sof_handler = NULL;
+                    class_setup_handler = NULL;
+                    for (i = 1; i < MAX_CHIP_EP; i++)
+                        USB_UEP[i] = USB_EP_NONE;
+                    for (i = 2; i < (2 + 2 * MAX_EPNUM_USED); i++) {
+                        usb_bdt[i].BDSTAT = 0;
+                        usb_halt_saved[i] = 0;
+                    }
                 }
 
                 usb_ack_dat1(0);
@@ -409,6 +452,16 @@ void usb_handle_StandardDeviceRequest(BDentry *bdp) {
 void usb_handle_StandardInterfaceRequest(BDentry *bdp) {
     BYTE *packet = bdp->BDADDR;
 
+    if (usb_device_state != CONFIGURED_STATE || packet[USB_wIndexHigh] ||
+            packet[USB_wIndex] >= usb_config_descriptor[4] ||
+            packet[USB_wValue] || packet[USB_wValueHigh] || packet[USB_wLengthHigh] ||
+            packet[USB_bmRequestType] != (packet[USB_bRequest] == USB_REQUEST_SET_INTERFACE ? 0x01 : 0x81) ||
+            packet[USB_wLength] != (packet[USB_bRequest] == USB_REQUEST_GET_STATUS ? 2 :
+                    packet[USB_bRequest] == USB_REQUEST_GET_INTERFACE ? 1 : 0)) {
+        usb_RequestError();
+        return;
+    }
+
     switch (packet[USB_bRequest]) {
         case USB_REQUEST_GET_STATUS:
             EP0_Inbdp->BDADDR[0] = 0x00;
@@ -416,7 +469,7 @@ void usb_handle_StandardInterfaceRequest(BDentry *bdp) {
             usb_ack_dat1(2);
             break;
         case USB_REQUEST_GET_INTERFACE:
-            if (USB_NUM_INTERFACES > packet[USB_bInterface]) {
+            if (usb_config_descriptor[4] > packet[USB_bInterface]) {
                 // TODO: Implement alternative interfaces, or move responsibility to class/vendor functions.
                 EP0_Inbdp->BDADDR[0] = 0;
                 usb_ack_dat1(1);
@@ -424,7 +477,7 @@ void usb_handle_StandardInterfaceRequest(BDentry *bdp) {
                 usb_RequestError();
             break;
         case USB_REQUEST_SET_INTERFACE:
-            if (USB_NUM_INTERFACES > packet[USB_bInterface] && 0u == packet[USB_wValue]) {
+            if (usb_config_descriptor[4] > packet[USB_bInterface] && 0u == packet[USB_wValue]) {
                 // TODO: Implement alternative interfaces...
                 usb_ack_dat1(0);
             } else
@@ -446,6 +499,28 @@ void usb_handle_StandardEndpointRequest(BDentry *bdp) {
 
     packet = bdp->BDADDR;
 
+    epnum = packet[USB_wIndex] & 0x0f;
+    dir = packet[USB_wIndex] >> 7;
+    /* Bound the allocated BDT, not merely the silicon's endpoint count. */
+    if (packet[USB_wIndexHigh] || (packet[USB_wIndex] & 0x70) ||
+            epnum > MAX_EPNUM_USED ||
+            !(USB_UEP[epnum] & (dir ? USB_UEP_EPINEN : USB_UEP_EPOUTEN)) ||
+            packet[USB_wValue] || packet[USB_wValueHigh]) {
+        usb_RequestError();
+        return;
+    }
+    if (packet[USB_bRequest] == USB_REQUEST_GET_STATUS) {
+        if (packet[USB_bmRequestType] != 0x82 ||
+                packet[USB_wLength] != 2 || packet[USB_wLengthHigh]) {
+            usb_RequestError();
+            return;
+        }
+    } else if (packet[USB_bmRequestType] != 0x02 || epnum == 0 ||
+            packet[USB_wLength] || packet[USB_wLengthHigh]) {
+        usb_RequestError();
+        return;
+    }
+
     switch (packet[USB_bRequest]) {
         case USB_REQUEST_GET_STATUS:
             EP0_Inbdp->BDADDR[0] = 0x00; // Assume no stall
@@ -453,7 +528,8 @@ void usb_handle_StandardEndpointRequest(BDentry *bdp) {
             epnum = packet[USB_wIndex] & 0x0F;
             dir = packet[USB_wIndex] >> 7;
             epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_EVEN)];
-            if (epbd->BDSTAT & BSTALL)
+            /* DS39897C pp.214-215: BSTALL is PID0 after ownership returns. */
+            if ((epbd->BDSTAT & (UOWN | BSTALL)) == (UOWN | BSTALL))
                 EP0_Inbdp->BDADDR[0] = 0x01; // EVEN BD is stall flag set?
             //epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_ODD)];
             //if (epbd->BDSTAT &= ~BSTALL)
@@ -462,43 +538,24 @@ void usb_handle_StandardEndpointRequest(BDentry *bdp) {
             break;
 
         case USB_REQUEST_CLEAR_FEATURE:
-            // As this is really is an application event and there
-            // should be a call back and protocol for handling the
-            // possible lost of a data packet.
-            // TODO: ping-ping support.
-
-            epnum = packet[USB_wIndex] & 0x0F; // JTR Added V0.2 after microchip stuff up with their documentation.
             pUEP = USB_UEP;
             pUEP += epnum;
             *pUEP &= ~USB_UEP_EPSTALL;
-
-            dir = packet[USB_wIndex] >> 7;
             epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_EVEN)];
-            epbd->BDSTAT &= ~BSTALL;
-            if (dir) epbd->BDSTAT |= DTS; // JTR added IN EP set DTS as it will be toggled to zero next transfer
-            if (0 == dir) epbd->BDSTAT &= ~DTS; // JTR added
-
-            // JTR this pointless ATM. If ping-pong is enabled then you need to track PPBI
-            // and set up ODD and EVEN BDs in respect to this. See complicated system in
-            // microchip stack >= 2.8
-
-            //		epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_ODD)];
-            //		epbd->BDSTAT &= ~BSTALL;
-            //		if (dir) epbd->BDSTAT |= DTS;		// JTR added
-            //		if (0 == dir) epbd->BDSTAT &= ~DTS;	// JTR added
-
-
+            if ((epbd->BDSTAT & (UOWN | BSTALL)) == (UOWN | BSTALL))
+                epbd->BDSTAT = usb_halt_saved[USB_CALC_BD(epnum, dir, USB_PP_EVEN)];
+            /* Queued packet resumes at DATA0; a free BD toggles on submission. */
+            epbd->BDSTAT = (epbd->BDSTAT & UOWN) ? (UOWN | DTSEN) : (DTS | DTSEN);
             usb_ack_dat1(0);
             break;
 
 
         case USB_REQUEST_SET_FEATURE:
-            epnum = packet[USB_wIndex] & 0x0F;
-            dir = packet[USB_wIndex] >> 7;
             epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_EVEN)];
-            epbd->BDSTAT |= BSTALL;
-            //epbd = &usb_bdt[USB_CALC_BD(epnum, dir, USB_PP_ODD)];
-            //epbd->BDSTAT |= BSTALL;
+            if ((epbd->BDSTAT & (UOWN | BSTALL)) != (UOWN | BSTALL))
+                usb_halt_saved[USB_CALC_BD(epnum, dir, USB_PP_EVEN)] = epbd->BDSTAT;
+            /* SETUP holds PKTDIS: reclaim safely, then publish a STALL BD. */
+            epbd->BDSTAT = UOWN | BSTALL;
             usb_ack_dat1(0);
             break;
         case USB_REQUEST_SYNCH_FRAME:
@@ -516,6 +573,10 @@ void usb_handle_in(void) {
 void usb_handle_out(void) {
     if (endpoints[USB_STAT2EP(trn_status)].out_handler) {
         endpoints[USB_STAT2EP(trn_status)].out_handler();
+    } else if (USB_STAT2EP(trn_status) == 0) {
+        /* Completed control-read status ZLP: receive the next SETUP. */
+        EP0_Outbdp->BDCNT = USB_EP0_BUFFER_SIZE;
+        EP0_Outbdp->BDSTAT = UOWN | DTSEN;
     }
 }
 
@@ -552,6 +613,10 @@ void usb_ack_dat1(int bdcnt) {
 
 void usb_RequestError(void) {
 
+    usbrequesterrorflag = 1;
+    usb_unset_in_handler(0);
+    usb_unset_out_handler(0);
+
     usb_bdt[USB_CALC_BD(0, USB_DIR_OUT, USB_PP_EVEN)].BDCNT = USB_EP0_BUFFER_SIZE;
     //usb_bdt[USB_CALC_BD(0, USB_DIR_OUT, USB_PP_ODD)].BDCNT = USB_EP0_BUFFER_SIZE;
 
@@ -575,6 +640,14 @@ void usb_set_address(void) {
     usb_unset_in_handler(0); // Unregister handler
 }
 
+static void usb_start_rom_reply(unsigned int requested) {
+    /* USB 2.0 5.5.3: terminate early only with a short packet, not an extra
+     * packet after the host's exact wLength or after an already short tail. */
+    usb_rom_need_zlp = usb_rom_len < requested && (usb_rom_len % USB_EP0_BUFFER_SIZE) == 0;
+    usb_set_in_handler(0, usb_send_rom);
+    usb_send_rom();
+}
+
 static void usb_send_rom(void) {
 
     unsigned int i;
@@ -587,7 +660,7 @@ static void usb_send_rom(void) {
         }
     } else {
         packet_len = 0;
-        usb_unset_in_handler(0);
+        usb_rom_need_zlp = 0;
     }
 
     EP0_Inbdp->BDCNT = (BYTE) packet_len;
@@ -595,5 +668,7 @@ static void usb_send_rom(void) {
 
     usb_rom_ptr += packet_len;
     usb_rom_len -= packet_len;
+    if (!usb_rom_len && !usb_rom_need_zlp)
+        usb_unset_in_handler(0);
 }
 

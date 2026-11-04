@@ -12,18 +12,20 @@
       <itemPath>../basic.h</itemPath>
       <itemPath>../bitbang.h</itemPath>
       <itemPath>../capability_adc/adc.h</itemPath>
-      <itemPath>../dp_usb/cdc.h</itemPath>
-      <itemPath>../descriptors.h</itemPath>
+      <itemPath>../core_usb/cdc.h</itemPath>
+      <itemPath>../core_usb/descriptors.h</itemPath>
       <itemPath>../protocol_dio/dio.h</itemPath>
       <itemPath>../hardwarev3.h</itemPath>
       <itemPath>../pc_at_keyboard.h</itemPath>
       <itemPath>../pic.h</itemPath>
-      <itemPath>../dp_usb/picusb.h</itemPath>
+      <itemPath>../core_usb/picusb.h</itemPath>
 <itemPath>../protocol_wire/raw2wire.h</itemPath>
       <itemPath>../protocol_wire/raw3wire.h</itemPath>
       <itemPath>../capability_selftest/selftest.h</itemPath>
       <itemPath>../sump.h</itemPath>
-      <itemPath>../dp_usb/usb_stack.h</itemPath>
+      <itemPath>../core_usb/usb_stack.h</itemPath>
+      <itemPath>../core_usb/usb_stack_globals.h</itemPath>
+      <itemPath>../core_usb/prj_usb_config.h</itemPath>
       <itemPath>../onboard_eeprom.h</itemPath>
       <itemPath>../protocol_i2c/i2c.h</itemPath>
       <itemPath>../configuration.h</itemPath>
@@ -79,7 +81,7 @@
       <itemPath>../basic.c</itemPath>
       <itemPath>../bitbang.c</itemPath>
       <itemPath>../capability_adc/adc.c</itemPath>
-      <itemPath>../dp_usb/cdc.c</itemPath>
+      <itemPath>../core_usb/cdc.c</itemPath>
       <itemPath>../protocol_dio/dio.c</itemPath>
       <itemPath>../protocol_jtag/jtag.c</itemPath>
       <itemPath>../tool_xsvf/lenval.c</itemPath>
@@ -93,7 +95,7 @@
       <itemPath>../capability_selftest/selftest.c</itemPath>
       <itemPath>../capability_smps/smps.c</itemPath>
       <itemPath>../sump.c</itemPath>
-      <itemPath>../dp_usb/usb_stack.c</itemPath>
+      <itemPath>../core_usb/usb_stack.c</itemPath>
       <itemPath>../onboard_eeprom.c</itemPath>
       <itemPath>../protocol_i2c/i2c.c</itemPath>
       <itemPath>../hd44780.c</itemPath>
@@ -157,7 +159,7 @@
         <makeCustomizationEnableLongLines>false</makeCustomizationEnableLongLines>
         <makeCustomizationNormalizeHexFile>false</makeCustomizationNormalizeHexFile>
       </makeCustomizationType>
-      <item path="../dp_usb/cdc.c" ex="true" overriding="false">
+      <item path="../core_usb/cdc.c" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -171,7 +173,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../dp_usb/cdc.h" ex="true" overriding="false">
+      <item path="../core_usb/cdc.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -185,7 +187,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../dp_usb/picusb.h" ex="true" overriding="false">
+      <item path="../core_usb/picusb.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -199,7 +201,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../dp_usb/usb_stack.c" ex="true" overriding="false">
+      <item path="../core_usb/usb_stack.c" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -213,7 +215,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../dp_usb/usb_stack.h" ex="true" overriding="false">
+      <item path="../core_usb/usb_stack.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>

@@ -54,7 +54,7 @@ extern uint8_t avrisp_response_buffer[AVRISP_BUFFER_SIZE];
 extern volatile uint8_t avrisp_timeout_ticks;
 
 
-/** True while the mkII USB personality is enumerated (see dp_usb/cdc.c). */
+/** True while the mkII USB personality is enumerated (see core_usb/cdc.c). */
 extern volatile bool avrisp_usb_personality_active;
 
 /** Arms the bulk endpoint 2 pair for the mkII personality. */
