@@ -22,26 +22,47 @@
 #include <stdint.h>
 
 /**
- * The possible bus speeds for bit-banging operations.
+ * Call bitbang_setup() before any profile-dependent operation, including pin
+ * setters, and again when changing pin count or speed. There is no implicit
+ * default profile: setup is state-only and does not drive any pins. Callers
+ * also own valid numbits (1..16) before value transfers. The terminal parser
+ * validates widths; binary raw entry fixes the width at eight bits.
+ */
+
+/**
+ * Waiting-I2C contract (all calls with wait_for_clock_release=true and the
+ * _wait / i2c_write_bit signals): high_impedance must be ON, with external
+ * pull-ups. Releasing SCL is intentional; push-pull drive is not supported.
+ * On failure both lines are released and the sticky i2c_error is set. Clear
+ * that status before a new operation, not between signals of one operation.
+ * Raw/non-waiting primitives neither wait for SCL nor consume that status.
+ * See DS39897C 10.1/10.1.1 for input/released versus driven pin behavior.
+ */
+
+/**
+ * Timing profiles for bit-banging operations. Enum names are legacy nominal
+ * rates, not frequency guarantees. At FCY=16 MHz the raw tick path is roughly
+ * 6/60/150 kHz for the first three profiles; data setup, sampling, open-drain
+ * rise time and protocol/transport gaps reduce the effective transfer rate.
  */
 typedef enum {
   /**
-   * Selects a bus speed of 5kHz.
+   * Slow profile (raw ticks approximately 6 kHz).
    */
   BITBANG_SPEED_5KHZ = 0,
 
   /**
-   * Selects a bus speed of 50kHz.
+   * Medium profile (raw ticks approximately 60 kHz).
    */
   BITBANG_SPEED_50KHZ,
 
   /**
-   * Selects a bus speed of 100kHz.
+   * Fast profile (raw ticks approximately 150 kHz).
    */
   BITBANG_SPEED_100KHZ,
 
   /**
-   * Selects the maximum bus speed, which is around 400kHz.
+   * No deliberate phase delay; the maximum rate depends on the primitive.
    */
   BITBANG_SPEED_MAXIMUM
 } bp_bitbang_speed_t;
@@ -79,7 +100,9 @@ typedef enum {
 void bitbang_setup(unsigned char pins, const bp_bitbang_speed_t speed);
 
 /**
- * Writes a value to the bus then reads a value back, used by 3-wire protocols.
+ * Writes MOSI and samples the fixed MISO pin, used by 3-wire protocols.
+ * This primitive requires three-wire setup; it does not use the selected
+ * single-bit input pin.
  *
  * @warning The amount of bits to read and write is set in the numbits field in
  * the mode configuration structure (up to 16).
@@ -91,7 +114,7 @@ void bitbang_setup(unsigned char pins, const bp_bitbang_speed_t speed);
 uint16_t bitbang_read_with_write(const uint16_t value);
 
 /**
- * Writes a value to the bus, used by 2-wire protocols.
+ * Writes a value on MOSI, used by 2-wire protocols.
  *
  * @warning The amount of bits to write is set in the numbits field in the mode
  * configuration structure (up to 16).
@@ -106,7 +129,7 @@ void bitbang_write_value(const uint16_t value,
                          const bool wait_for_clock_release);
 
 /**
- * Reads a value from the bus, used by 2-wire protocols.
+ * Reads a value from the fixed MOSI/SDA pin, used by 2-wire protocols.
  *
  * @warning The output size is dependent on the numbits field in the mode
  * configuration structure, with said number being the amount of bits to read
@@ -122,7 +145,7 @@ void bitbang_write_value(const uint16_t value,
 uint16_t bitbang_read_value(const bool wait_for_clock_release);
 
 /**
- * Reads a single bit from the MISO pin.
+ * Reads a single bit from the setup-selected input (2 pins: MOSI; 3: MISO).
  *
  * @param[in] wait_for_clock_release whether to wait for a slave to release the
  *            clock line before sampling, which I2C devices may do to stretch
@@ -133,10 +156,11 @@ uint16_t bitbang_read_value(const bool wait_for_clock_release);
 bool bitbang_read_bit(const bool wait_for_clock_release);
 
 /**
- * Number of clock-stretch waits that have timed out since reset.  A
+ * Saturating number of clock-stretch waits that have timed out since reset. A
  * non-zero count means some operation gave up waiting for a slave to
  * release the clock line, so its result may be invalid; the count lets
- * callers and diagnostics distinguish that from a valid transfer.
+ * callers and diagnostics distinguish that from a valid transfer. Setup and
+ * clearing the sticky operation status do not clear this diagnostic counter.
  */
 uint16_t bitbang_clock_stretch_timeouts(void);
 
@@ -192,8 +216,9 @@ void bitbang_set_cs(const bool state);
 bool bitbang_read_miso(void);
 
 /**
- * Sets the pins indicated by the given bitmask to HIGH state and OUTPUT
- * direction, then spins for the given amount of microseconds.
+ * Sets the pins HIGH (driven output, or released input in high-impedance
+ * mode), then waits using the short-delay helper.
+ * Delay must be within the helper's 0..16384 microsecond input range.
  *
  * @param[in] pins the bitmask of the pins to set HIGH.
  * @param[in] delay the amount of microseconds to wait after setting the pins
@@ -207,18 +232,18 @@ void bitbang_set_pins_high(const uint16_t pins_bitmask, const uint16_t delay);
  *
  * @param[in] pins the bitmask of the pins to set LOW.
  * @param[in] delay the amount of microseconds to wait after setting the pins
- * LOW.
+ * LOW (short-delay helper input range 0..16384 microseconds).
  */
 void bitbang_set_pins_low(const uint16_t pins_bitmask, const uint16_t delay);
 
 /**
- * Sets the pins indicated by the given bitmask to the given state and OUTPUT
- * direction, then spins for the given amount of microseconds.
+ * Sets the selected pins to the given state (HIGH is released when
+ * high_impedance is ON), then waits using the short-delay helper.
  *
  * @param[in] state the state to set the selected pins to.
  * @param[in] pins the bitmask of the pins to set.
  * @param[in] delay the amount of microseconds to wait after setting the pins
- * LOW.
+ * to the requested state (helper input range 0..16384 microseconds).
  */
 void bitbang_set_pins(const bool state, const uint16_t pins_mask,
                       const uint16_t delay);
@@ -248,13 +273,15 @@ bool bitbang_read_pin(const uint16_t pin_bit);
  * @param[in] type the start signal type.
  *
  * @return true if an error occurred, false otherwise.
+ * This legacy raw primitive never waits for SCL; its return convention is
+ * the opposite of bitbang_i2c_start_wait(), which returns true on success.
  *
  * @see bp_bitbang_i2c_start_type_t
  */
 bool bitbang_i2c_start(bp_bitbang_i2c_start_type_t type);
 
 /**
- * Sends the appropriate signals to indicate an I2C transmission stop frame.
+ * Sends a legacy raw STOP without waiting for SCL or checking sticky status.
  */
 void bitbang_i2c_stop(void);
 

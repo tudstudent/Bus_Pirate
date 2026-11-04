@@ -81,7 +81,7 @@ SOURCES := \
 	capability_adc/adc.c \
 	basic.c \
 	protocol_binary/binary_io.c \
-	bitbang.c \
+	core_bitbang/bitbang.c \
 	core_system/core.c \
 	protocol_dio/dio.c \
 	hd44780.c \
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system \
+	-I. -Icore_system -Icore_bitbang \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
