@@ -100,7 +100,7 @@ SOURCES := \
 	protocol_wire/raw3wire.c \
 	capability_selftest/selftest.c \
 	capability_smps/smps.c \
-	spi.c \
+	protocol_spi/spi.c \
 	sump.c \
 	protocol_uart/uart.c \
 	protocol_uart/uart2.c

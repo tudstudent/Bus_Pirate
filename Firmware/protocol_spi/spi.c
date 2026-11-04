@@ -338,7 +338,7 @@ void spi_setup_prepare(void) {
   spi_cs_line_state = getint_with_spaces();
   spi_enabled = getint_with_spaces();
 
-  user_prompt = !(((spi_speed > 0) && (spi_speed <= 4)) &&
+  user_prompt = !(((spi_speed > 0) && (spi_speed <= sizeof(spi_bus_speed))) &&
                   ((spi_clock_polarity > 0) && (spi_clock_polarity <= 2)) &&
                   ((spi_clock_edge > 0) && (spi_clock_edge <= 2)) &&
                   ((spi_data_sampling > 0) && (spi_data_sampling <= 2)) &&
@@ -553,6 +553,9 @@ void spi_disable_interface(void) {
  */
 #define SPI_POLL_TIMEOUT 0xFFFF
 
+/* Retain a module fault across all USB/UART chunks of one bulk command. */
+static bool spi_bulk_fault;
+
 /**
  * Waits until there is room to hand a byte to the SPI peripheral.
  *
@@ -627,114 +630,125 @@ static inline uint8_t spi_read_byte(void)
     return result;
 }
 
-#ifdef BUSPIRATEV3
-static void spi_read_bytes_to_uart(uint16_t length)
-{
-#if 1
-    uint16_t sent = length;
-    uint16_t rec = length;
-
-    while(sent || rec)
-    {
-        // PIC24FJ64GA004 Family Errata suggests not to use SPITBF
-        if( (SPI1STATbits.SPIBEC < 7) && SPI1STATbits.SRXMPT && sent ) {
-            SPI1BUF = 0x00;
-            sent--;
-        }
-
-        if( (!SPI1STATbits.SRXMPT) && (!U1STAbits.UTXBF) && rec ) {
-            U1TXREG = SPI1BUF;
-            rec--;
-        }
-    }
-#else
-  /* Writes data to the serial port as soon as read from the SPI bus. */
-
-    while (length--)
-    {
-        while (SPI1STATbits.SPITBF);
-
-        /* Put the value on the bus. */
-        SPI1BUF = 0xff;
-
-        while (U1STAbits.UTXBF || SPI1STATbits.SRXMPT);
-
-        /* read from SPI BUS and write to UART */
-        U1TXREG = SPI1BUF;
-    }
-#endif
+/* DS39897C 15.1 / register 15-1: SRXMPT describes received data;
+ * SPIBEC describes pending transfers. Reset the budget only on progress. */
+static bool spi_bulk_progress(bool progressed, uint32_t *budget) {
+  if (!SPI1STATbits.SPIEN || SPI1STATbits.SPIROV ||
+      (!progressed && --*budget == 0)) {
+    spi_bulk_fault = true;
+    return false;
+  }
+  if (progressed) {
+    *budget = SPI_POLL_TIMEOUT;
+  }
+  return true;
 }
 
-static void spi_write_bytes_from_uart(uint16_t length)
-{
-    uint16_t sent = length;
-    uint16_t rec = length;
-
-    while(sent || rec)
-    {
-        // PIC24FJ64GA004 Family Errata suggests not to use SPITBF
-        if( (SPI1STATbits.SPIBEC < 7) && U1STAbits.URXDA && sent ) {
-            SPI1BUF = LO8(U1RXREG);
-            sent--;
-        }
-
-        if( !SPI1STATbits.SRXMPT && rec ) {
-            SPI1BUF;
-            rec--;
-        }
+#ifdef BUSPIRATEV3
+static void spi_read_bytes_to_uart(uint16_t length) {
+  uint16_t sent = length, rec = length;
+  uint32_t budget = SPI_POLL_TIMEOUT;
+  (void)spi_bulk_progress(true, &budget);
+  while ((sent || rec) && !spi_bulk_fault) {
+    bool progressed = false;
+    if (rec > sent && !SPI1STATbits.SRXMPT && !U1STAbits.UTXBF) {
+      U1TXREG = SPI1BUF;
+      rec--;
+      progressed = true;
     }
+    /* Retain the v3 errata workaround: do not poll SPITBF. */
+    if (sent && SPI1STATbits.SPIBEC < 7 && SPI1STATbits.SRXMPT) {
+      SPI1BUF = 0x00;
+      sent--;
+      progressed = true;
+    }
+    if (!spi_bulk_progress(progressed, &budget)) {
+      break;
+    }
+  }
+  while (rec--) {
+    user_serial_transmit_character(0xFF);
+  }
+}
+
+static void spi_write_bytes_from_uart(uint16_t length) {
+  uint16_t sent = length, rec = length;
+  uint32_t budget = SPI_POLL_TIMEOUT;
+  (void)spi_bulk_progress(true, &budget);
+  while ((sent || rec) && !spi_bulk_fault) {
+    bool progressed = false;
+    if (rec > sent && !SPI1STATbits.SRXMPT) {
+      (void)SPI1BUF;
+      rec--;
+      progressed = true;
+    }
+    if (sent && SPI1STATbits.SPIBEC < 7 && U1STAbits.URXDA) {
+      SPI1BUF = LO8(U1RXREG);
+      sent--;
+      progressed = true;
+    }
+    /* Waiting for a host byte with no SPI transfer pending is not a
+       stalled peripheral. Preserve the existing host-input framing. */
+    if (!progressed && sent == rec && !U1STAbits.URXDA &&
+        SPI1STATbits.SPIEN && !SPI1STATbits.SPIROV) {
+      continue;
+    }
+    if (!spi_bulk_progress(progressed, &budget)) {
+      break;
+    }
+  }
+  /* Consume the request even on fault, so payload cannot become commands. */
+  while (sent--) {
+    (void)user_serial_read_byte();
+  }
 }
 #endif
 
 #ifdef BUSPIRATEV4
-
-static void spi_read_bytes(uint8_t* data, uint16_t length)
-{
-    uint16_t cnt = length;
-    uint16_t rec = 0;
-
-    while(cnt) {
-        if(!(SPI1STAT & (_SPI1STAT_SPIBEC2_MASK|_SPI1STAT_SPIRBF_MASK)))
-            SPI1BUF = 0x00, cnt--;
-
-        if(!SPI1STATbits.SRXMPT)
-            data[rec++] = SPI1BUF;
+static void spi_read_bytes(uint8_t *data, uint16_t length) {
+  uint16_t sent = 0, rec = 0;
+  uint32_t budget = SPI_POLL_TIMEOUT;
+  (void)spi_bulk_progress(true, &budget);
+  while (rec < length && !spi_bulk_fault) {
+    bool progressed = false;
+    if (rec < sent && !SPI1STATbits.SRXMPT) {
+      data[rec++] = SPI1BUF;
+      progressed = true;
     }
-
-    while(rec != length)
-    {
-        if( (!SPI1STATbits.SRXMPT))
-            data[rec++] = SPI1BUF;
+    if (sent < length &&
+        !(SPI1STAT & (_SPI1STAT_SPIBEC2_MASK | _SPI1STAT_SPIRBF_MASK))) {
+      SPI1BUF = 0x00;
+      sent++;
+      progressed = true;
     }
+    if (!spi_bulk_progress(progressed, &budget)) {
+      break;
+    }
+  }
+  /* Keep the promised response length without polling a dead module again. */
+  memset(data + rec, 0xFF, length - rec);
 }
 
-static void spi_write_bytes(uint8_t* data, uint16_t length)
-{
-    uint16_t cnt = length;
-    uint16_t sent = 0;
-
-    while(sent != length)
-    {
-        if(!(SPI1STAT & (_SPI1STAT_SPIBEC2_MASK|_SPI1STAT_SPIRBF_MASK)))
-            SPI1BUF = data[sent++];
-
-        if(!SPI1STATbits.SRXMPT)
-        {
-            /* Discard the byte clocked in while sending. */
-            (void)SPI1BUF;
-            cnt--;
-        }
+static void spi_write_bytes(uint8_t *data, uint16_t length) {
+  uint16_t sent = 0, rec = 0;
+  uint32_t budget = SPI_POLL_TIMEOUT;
+  (void)spi_bulk_progress(true, &budget);
+  while (rec < length && !spi_bulk_fault) {
+    bool progressed = false;
+    if (rec < sent && !SPI1STATbits.SRXMPT) {
+      (void)SPI1BUF;
+      rec++;
+      progressed = true;
     }
-
-    while(cnt)
-    {
-        if( !SPI1STATbits.SRXMPT)
-        {
-            /* Discard the byte clocked in while sending. */
-            (void)SPI1BUF;
-            cnt--;
-        }
+    if (sent < length &&
+        !(SPI1STAT & (_SPI1STAT_SPIBEC2_MASK | _SPI1STAT_SPIRBF_MASK))) {
+      SPI1BUF = data[sent++];
+      progressed = true;
     }
+    if (!spi_bulk_progress(progressed, &budget)) {
+      break;
+    }
+  }
 }
 #endif
 
@@ -744,17 +758,25 @@ static void spi_write_bytes(uint8_t* data, uint16_t length)
  * CS transition events captured by the change notification interrupt on
  * RD4 (CN13): '[' for a falling edge, ']' for a rising one.  A polled
  * check cannot see a CS pulse only a microsecond wide (issue #141); the
- * CN hardware latches every edge, and the sniffer loop drains the ring
- * in order.
+ * CN notifies software of changes; it is not an edge FIFO. The sniffer
+ * drains captured transitions in order and reports a full software ring.
  */
-static volatile uint8_t cs_edge_ring[8];
+#define SPI_CS_EDGE_RING_SIZE 32
+static volatile uint8_t cs_edge_ring[SPI_CS_EDGE_RING_SIZE];
 static volatile uint8_t cs_edge_head;
 static volatile uint8_t cs_edge_tail;
+static volatile bool cs_edge_overflow;
 
 void __attribute__((interrupt, no_auto_psv)) _CNInterrupt(void) {
   _CNIF = 0;
-  cs_edge_ring[cs_edge_head & 0x07] = (SPICS == HIGH) ? ']' : '[';
-  cs_edge_head++;
+  uint8_t edge = (SPICS == HIGH) ? ']' : '[';
+  uint8_t head = cs_edge_head;
+  if ((uint8_t)(head - cs_edge_tail) >= SPI_CS_EDGE_RING_SIZE) {
+    cs_edge_overflow = true;
+  } else if (!cs_edge_overflow) {
+    cs_edge_ring[head & (SPI_CS_EDGE_RING_SIZE - 1)] = edge;
+    cs_edge_head = head + 1;
+  }
 }
 
 #endif /* BUSPIRATEV4 */
@@ -765,6 +787,11 @@ void spi_sniffer(bool trigger, bool terminal_mode) {
 #endif
 
 restart:
+
+#ifdef BUSPIRATEV4
+  _CNIE = 0;
+  CNEN1bits.CN13IE = 0;
+#endif
 
 #ifndef BUSPIRATEV4
   last_cs_line_state = HIGH;
@@ -777,7 +804,7 @@ restart:
 #ifdef BUSPIRATEV4
   /*
    * Capture CS transitions in hardware: the change notification
-   * interrupt latches every edge, so even the ~1 us CS pulses between
+     * interrupt can capture short CS pulses between
    * back-to-back SPI transactions produce their [ ] markers (#141).
    * Highest interrupt priority: the ISR is a handful of instructions,
    * and the smallest possible latency keeps two edges only ~1 us apart
@@ -785,15 +812,25 @@ restart:
    */
   cs_edge_head = 0;
   cs_edge_tail = 0;
+  cs_edge_overflow = false;
   _CNIF = 0;
   _CNIP = 7;
   CNEN1bits.CN13IE = 1;
   _CNIE = 1;
 #endif /* BUSPIRATEV4 */
 
-  if (trigger == SPI_SNIFF_ON_CS_LOW) {
-    SPI1CON1bits.SSEN = ON;
-    SPI2CON1bits.SSEN = ON;
+  /* Slave CKE=1 requires SSEN (DS39897C 15.1). Sniff-all must keep SS
+     active without gating on physical CS; the null PPS input is tied low. */
+  SPI1CON1bits.SSEN = ON;
+  SPI2CON1bits.SSEN = ON;
+  if (trigger == SPI_SNIFF_ALWAYS) {
+#ifdef BUSPIRATEV4
+    RPINR21bits.SS1R = 0x3F; /* RP63/VSS, DS39897C 10.4.5. */
+    RPINR23bits.SS2R = 0x3F;
+#else
+    RPINR21bits.SS1R = 0x1F; /* Reset/null input on the v3 PPS module. */
+    RPINR23bits.SS2R = 0x1F;
+#endif
   }
 
   SPI1STATbits.SPIEN = ON;
@@ -809,10 +846,12 @@ restart:
      * opening marker of its own transaction.  (The exact split between
      * a boundary and the adjacent pair is limited by the loop's serial
      * pass granularity - the same property the polled printer always
-     * had - but no event is ever lost.)
+      * had.) A full ring must not overwrite an unread marker or alias
+      * head/tail after 256 unconsumed transitions.
      */
-    while (cs_edge_tail != cs_edge_head) {
-      user_serial_ringbuffer_append(cs_edge_ring[cs_edge_tail & 0x07]);
+    while (!cs_edge_overflow && cs_edge_tail != cs_edge_head) {
+      user_serial_ringbuffer_append(
+          cs_edge_ring[cs_edge_tail & (SPI_CS_EDGE_RING_SIZE - 1)]);
       cs_edge_tail++;
     }
 #else
@@ -856,7 +895,16 @@ restart:
 
     /* Check for overflows. */
     if ((SPI1STATbits.SPIROV == ON) || (SPI2STATbits.SPIROV == ON) ||
-        (bus_pirate_configuration.overflow == YES)) {
+        (bus_pirate_configuration.overflow == YES)
+#ifdef BUSPIRATEV4
+        || cs_edge_overflow
+#endif
+        ) {
+
+#ifdef BUSPIRATEV4
+      _CNIE = 0;
+      CNEN1bits.CN13IE = 0;
+#endif
 
       /* Was the overflow coming from the serial port? */
       if (bus_pirate_configuration.overflow == NO) {
@@ -893,6 +941,13 @@ restart:
       }
 
       BP_LEDMODE = OFF;
+      /* A zero outside an escaped data pair reports an aborted capture.
+         Stay passive until the host stops it; the external master may
+         still be driving the bus that caused the overflow. */
+      REPORT_IO_FAILURE();
+      user_serial_ringbuffer_flush();
+      while (!user_serial_ready_to_read()) {
+      }
       break;
     }
 
@@ -1278,6 +1333,7 @@ static void spi_read_to_host(uint16_t bytes_to_read)
 }
 
 void spi_read_write_io(const bool engage_cs) {
+  spi_bulk_fault = false;
 
   /* How many bytes to send to the bus. */
   uint16_t bytes_to_write = user_serial_read_big_endian_word();
@@ -1342,8 +1398,10 @@ void handle_extended_avr_command(void) {
     uint32_t address = user_serial_read_big_endian_long_word();
     uint32_t length = user_serial_read_big_endian_long_word();
 
+    /* The host sends a word address but a byte count. Include the final
+       16-bit word and reject only requests that would wrap its address. */
     if ((address > 0xFFFF) || (length > 0xFFFF) ||
-        ((address + length) > 0xFFFF)) {
+        ((address + ((length + 1) / 2)) > 0x10000UL)) {
       REPORT_IO_FAILURE();
       return;
     }
