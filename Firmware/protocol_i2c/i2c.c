@@ -426,6 +426,14 @@ void i2c_setup_prepare(void) {
   }
 
   mode_configuration.high_impedance = ON;
+#ifdef BUSPIRATEV4
+  /*
+   * A new session starts on the external bus; the onboard-EEPROM macro
+   * must not leak its I2C1 routing into the next session.
+   */
+  i2c_state.to_eeprom = false;
+#endif /* BUSPIRATEV4 */
+
   bitbang_i2c_clear_error();
 
 #ifdef BUSPIRATEV4
@@ -468,9 +476,12 @@ void i2c_cleanup(void) {
   i2c_state.acknowledgment_pending = false;
 
 #ifdef BP_I2C_USE_HW_BUS
+<<<<<<< HEAD:Firmware/protocol_i2c/i2c.c
 
   hardware_i2c_active = false;
   hardware_i2c_error = false;
+=======
+>>>>>>> fix/cdc-volatile:Firmware/i2c.c
 
 #ifdef BUSPIRATEV4
 
@@ -591,12 +602,46 @@ void i2c_macro(unsigned int c) {
       mode_configuration.command_error = YES;
       break;
     }
+<<<<<<< HEAD:Firmware/protocol_i2c/i2c.c
     if (hardware_i2c_active) {
       i2c_stop();
       if (hardware_i2c_error) {
         break;
       }
     }
+=======
+    MSG_USING_ONBOARD_I2C_EEPROM;
+
+    i2c_state.to_eeprom = true;
+
+    /*
+     * I2C1CON: I2C1 CONTROL REGISTER
+     *
+     * MSB
+     * x-x0x0x0xxxxxxxx
+     *    | | |
+     *    | | +------------ SMEN:  Disable SMBus support.
+     *    | +-------------- A10M:  Use 7-bit slave addresses.
+     *    +---------------- SCREL: Enable clock stretching.
+     *
+     */
+    I2C1CON &=
+        ~(_I2C1CON_A10M_MASK | _I2C1CON_SCLREL_MASK | _I2C1CON_SMEN_MASK);
+
+    /* General call address. */
+    I2C1ADD = 0;
+
+    /* Do not mask address bits. */
+    I2C1MSK = 0;
+
+    /* Set the I2C baud rate generator speed. */
+    I2C1BRG = HARDWARE_I2C_BRG_SPEEDS[mode_configuration.speed];
+
+    /* Enable the internal I2C module. */
+    I2C1CONbits.I2CEN = ON;
+
+    /* Disable the external I2C module. */
+>>>>>>> fix/cdc-volatile:Firmware/i2c.c
     I2C3CONbits.I2CEN = OFF;
     i2c_state.acknowledgment_pending = false;
     i2c_state.to_eeprom = true;

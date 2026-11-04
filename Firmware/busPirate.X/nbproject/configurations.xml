@@ -26,8 +26,13 @@
       <itemPath>../core_usb/usb_stack.h</itemPath>
       <itemPath>../core_usb/usb_stack_globals.h</itemPath>
       <itemPath>../core_usb/prj_usb_config.h</itemPath>
+<<<<<<< HEAD
       <itemPath>../onboard_eeprom.h</itemPath>
       <itemPath>../protocol_i2c/i2c.h</itemPath>
+=======
+      <itemPath>../core_eeprom/onboard_eeprom.h</itemPath>
+      <itemPath>../i2c.h</itemPath>
+>>>>>>> fix/cdc-volatile
       <itemPath>../configuration.h</itemPath>
       <itemPath>../hd44780.h</itemPath>
       <itemPath>../spi.h</itemPath>
@@ -96,8 +101,13 @@
       <itemPath>../capability_smps/smps.c</itemPath>
       <itemPath>../sump.c</itemPath>
       <itemPath>../core_usb/usb_stack.c</itemPath>
+<<<<<<< HEAD
       <itemPath>../onboard_eeprom.c</itemPath>
       <itemPath>../protocol_i2c/i2c.c</itemPath>
+=======
+      <itemPath>../core_eeprom/onboard_eeprom.c</itemPath>
+      <itemPath>../i2c.c</itemPath>
+>>>>>>> fix/cdc-volatile
       <itemPath>../hd44780.c</itemPath>
       <itemPath>../spi.c</itemPath>
       <itemPath>../protocol_uart/uart.c</itemPath>
@@ -271,7 +281,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../onboard_eeprom.c" ex="true" overriding="false">
+      <item path="../core_eeprom/onboard_eeprom.c" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -285,7 +295,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../onboard_eeprom.h" ex="true" overriding="false">
+      <item path="../core_eeprom/onboard_eeprom.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -328,7 +338,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages"/>
+        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
@@ -569,7 +579,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages"/>
+        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
