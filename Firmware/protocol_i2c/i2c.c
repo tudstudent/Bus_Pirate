@@ -126,6 +126,9 @@ static const uint8_t HARDWARE_I2C_BRG_SPEEDS[] = {
  */
 #define HARDWARE_I2C_BRG_MAX_INDEX 2
 
+static bool hardware_i2c_error = false;
+static bool hardware_i2c_active = false;
+
 /**
  * Returns the hardware baud rate generator value for the current session
  * speed, bounded to the table: the onboard-EEPROM macro keeps the
@@ -205,11 +208,31 @@ static void i2c_sniffer(bool interactive_mode);
  */
 static bool i2c_write_then_read(void);
 
+static bool i2c_check_error(void) {
+  bool failed = i2c_state.mode == I2C_TYPE_SOFTWARE && bitbang_i2c_error();
+#ifdef BP_I2C_USE_HW_BUS
+  if (i2c_state.mode == I2C_TYPE_HARDWARE) {
+    failed = hardware_i2c_error;
+  }
+#endif
+  if (failed) {
+    i2c_state.acknowledgment_pending = false;
+    bp_write_line("I2C bus error");
+    mode_configuration.command_error = YES;
+    return true;
+  }
+  return false;
+}
+
 uint16_t i2c_read(void) {
   uint8_t value;
+  bitbang_i2c_clear_error();
 
   if (i2c_state.acknowledgment_pending) {
     handle_pending_ack(I2C_ACK_BIT);
+    if (i2c_check_error()) {
+      return 0xFF;
+    }
     bpSP;
     MSG_ACK;
     bpSP;
@@ -224,16 +247,23 @@ uint16_t i2c_read(void) {
     value = 0;
 #endif /* BP_I2C_USE_HW_BUS */
   }
+  if (i2c_check_error()) {
+    return 0xFF;
+  }
   i2c_state.acknowledgment_pending = true;
   return value;
 }
 
 unsigned int i2c_write(unsigned int c) {
+  bitbang_i2c_clear_error();
   if (i2c_state.acknowledgment_pending) {
+    handle_pending_ack(I2C_ACK_BIT);
+    if (i2c_check_error()) {
+      return 0x100;
+    }
     bpSP;
     MSG_ACK;
     bpSP;
-    handle_pending_ack(I2C_ACK_BIT);
   }
 
   if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
@@ -246,6 +276,9 @@ unsigned int i2c_write(unsigned int c) {
 #endif /* BP_I2C_USE_HW_BUS */
   }
 
+  if (i2c_check_error()) {
+    return 0x100;
+  }
   bpSP;
   if (c == 0) {
     MSG_ACK;
@@ -257,6 +290,7 @@ unsigned int i2c_write(unsigned int c) {
 }
 
 void i2c_start(void) {
+  bitbang_i2c_clear_error();
   /* Reset the bus state if an acknowledgement is pending. */
 
   if (i2c_state.acknowledgment_pending) {
@@ -264,43 +298,49 @@ void i2c_start(void) {
     bpBR;
 
     handle_pending_ack(I2C_NACK_BIT);
+    if (i2c_check_error()) {
+      return;
+    }
   }
 
   /* Send a start signal on the bus. */
 
   if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
-    if (bitbang_i2c_start(BITBANG_I2C_START_ONE_SHOT)) {
-      /* There is a short or pull-ups are wrong. */
-      MSG_WARNING_HEADER;
-      MSG_WARNING_SHORT_OR_NO_PULLUP;
-      bpBR;
-    }
+    bitbang_i2c_start_wait(BITBANG_I2C_START_ONE_SHOT);
   } else {
 #ifdef BP_I2C_USE_HW_BUS
     hardware_i2c_start();
 #endif /* BP_I2C_USE_HW_BUS */
   }
 
-  MSG_I2C_START_BIT;
+  if (!i2c_check_error()) {
+    MSG_I2C_START_BIT;
+  }
 }
 
 void i2c_stop(void) {
+  bitbang_i2c_clear_error();
   if (i2c_state.acknowledgment_pending) {
     MSG_NACK;
     bpBR;
 
     handle_pending_ack(I2C_NACK_BIT);
+    if (i2c_check_error()) {
+      return;
+    }
   }
 
   if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
-    bitbang_i2c_stop();
+    bitbang_i2c_stop_wait();
   } else {
 #ifdef BP_I2C_USE_HW_BUS
     hardware_i2c_stop();
 #endif /* BP_I2C_USE_HW_BUS */
   }
 
-  MSG_I2C_STOP_BIT;
+  if (!i2c_check_error()) {
+    MSG_I2C_STOP_BIT;
+  }
 }
 
 void i2c_print_settings(void) {
@@ -386,6 +426,7 @@ void i2c_setup_prepare(void) {
   }
 
   mode_configuration.high_impedance = ON;
+  bitbang_i2c_clear_error();
 
 #ifdef BUSPIRATEV4
   /*
@@ -427,7 +468,9 @@ void i2c_cleanup(void) {
   i2c_state.acknowledgment_pending = false;
 
 #ifdef BP_I2C_USE_HW_BUS
-  if (i2c_state.mode == I2C_TYPE_HARDWARE) {
+
+  hardware_i2c_active = false;
+  hardware_i2c_error = false;
 
 #ifdef BUSPIRATEV4
 
@@ -443,7 +486,6 @@ void i2c_cleanup(void) {
     I2C1CONbits.I2CEN = OFF;
 
 #endif /* BUSPIRATEV4 */
-  }
 #endif /* BP_I2C_USE_HW_BUS */
 }
 
@@ -457,6 +499,7 @@ void i2c_macro(unsigned int c) {
     break;
 
   case 1:
+    bitbang_i2c_clear_error();
     // setup both lines high first
     bitbang_set_pins_high(MOSI | CLK, 0);
     BPMSG1070;
@@ -474,7 +517,7 @@ void i2c_macro(unsigned int c) {
 
     for (i = 0; i < 0x100; i++) {
       if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
-        bitbang_i2c_start(BITBANG_I2C_START_ONE_SHOT); // send start
+        bitbang_i2c_start_wait(BITBANG_I2C_START_ONE_SHOT);
         bitbang_write_value(i, true);                        // send address
         c = bitbang_read_bit(true);                        // look for ack
       } else {
@@ -485,6 +528,9 @@ void i2c_macro(unsigned int c) {
 #endif /* BP_I2C_USE_HW_BUS */
       }
 
+      if (i2c_check_error()) {
+        return;
+      }
       if (c == I2C_ACK_BIT) {
         bp_write_formatted_integer(i);
         user_serial_transmit_character('(');
@@ -495,7 +541,7 @@ void i2c_macro(unsigned int c) {
         } else {
           if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
             bitbang_read_value(true);
-            bitbang_write_bit(HIGH);
+            bitbang_i2c_write_bit(HIGH);
           } else {
 #ifdef BP_I2C_USE_HW_BUS
             hardware_i2c_read();
@@ -507,11 +553,14 @@ void i2c_macro(unsigned int c) {
       }
 
       if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
-        bitbang_i2c_stop();
+        bitbang_i2c_stop_wait();
       } else {
 #ifdef BP_I2C_USE_HW_BUS
         hardware_i2c_stop();
 #endif /* BP_I2C_USE_HW_BUS */
+      }
+      if (i2c_check_error()) {
+        return;
       }
     }
     bpBR;
@@ -537,38 +586,22 @@ void i2c_macro(unsigned int c) {
 #if defined(BUSPIRATEV4)
 
   case 3: {
-    MSG_USING_ONBOARD_I2C_EEPROM;
-
-    i2c_state.to_eeprom = true;
-
-    /*
-     * I2C1CON: I2C1 CONTROL REGISTER
-     *
-     * MSB
-     * x-x0x0x0xxxxxxxx
-     *    | | |
-     *    | | +------------ SMEN:  Disable SMBus support.
-     *    | +-------------- A10M:  Use 7-bit slave addresses.
-     *    +---------------- SCREL: Enable clock stretching.
-     *
-     */
-    I2C1CON &=
-        ~(_I2C1CON_A10M_MASK | _I2C1CON_SCLREL_MASK | _I2C1CON_SMEN_MASK);
-
-    /* General call address. */
-    I2C1ADD = 0;
-
-    /* Do not mask address bits. */
-    I2C1MSK = 0;
-
-    /* Set the I2C baud rate generator speed. */
-    I2C1BRG = hardware_i2c_brg();
-
-    /* Enable the internal I2C module. */
-    I2C1CONbits.I2CEN = ON;
-
-    /* Disable the external I2C module. */
+    if (i2c_state.mode != I2C_TYPE_HARDWARE) {
+      bp_write_line("Onboard EEPROM requires hardware I2C");
+      mode_configuration.command_error = YES;
+      break;
+    }
+    if (hardware_i2c_active) {
+      i2c_stop();
+      if (hardware_i2c_error) {
+        break;
+      }
+    }
     I2C3CONbits.I2CEN = OFF;
+    i2c_state.acknowledgment_pending = false;
+    i2c_state.to_eeprom = true;
+    hardware_i2c_setup();
+    MSG_USING_ONBOARD_I2C_EEPROM;
     break;
   }
 
@@ -592,266 +625,257 @@ void i2c_pins_state(void) { MSG_I2C_PINS_STATE; }
 
 #if defined(BP_I2C_USE_HW_BUS)
 
-void hardware_i2c_start(void) {
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    /* Start condition on the external v4 I2C bus. */
-    I2C3CONbits.SEN = ON;
-    while (I2C3CONbits.SEN == ON) {
-    }
+/* DS39897C 16.1, registers 16-1/16-2: check completion before ACKSTAT.
+ * Use word-wide STAT accesses also on old v3 silicon (DS39881 errata #26). */
+#define I2C_HW_TIMEOUT 25000U
+#define I2C_HW_SEQUENCES 0x001FU
+#define I2C_HW_ERRORS (_I2C1STAT_BCL_MASK | _I2C1STAT_IWCOL_MASK | _I2C1STAT_I2COV_MASK)
 
+typedef struct {
+  volatile uint16_t *con;
+  volatile uint16_t *stat;
+  volatile uint16_t *trn;
+  volatile uint16_t *rcv;
+} hardware_i2c_registers_t;
+
+static hardware_i2c_registers_t hardware_i2c_registers(void) {
+#ifdef BUSPIRATEV4
+  if (!i2c_state.to_eeprom) {
+    hardware_i2c_registers_t bus = {&I2C3CON, &I2C3STAT, &I2C3TRN, &I2C3RCV};
+    return bus;
+  }
+#endif
+  hardware_i2c_registers_t bus = {&I2C1CON, &I2C1STAT, &I2C1TRN, &I2C1RCV};
+  return bus;
+}
+
+static void hardware_i2c_abort(void) {
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  hardware_i2c_error = true;
+  hardware_i2c_active = false;
+  i2c_state.acknowledgment_pending = false;
+  *bus.con = 0;
+  (void)*bus.rcv;
+  *bus.stat = 0;
+#ifdef BUSPIRATEV4
+  if (i2c_state.to_eeprom) {
+    BP_EE_SDA_DIR = INPUT;
+    BP_EE_SCL_DIR = INPUT;
     return;
   }
-#endif /* BUSPIRATEV4 */
+#endif
+  SDA_TRIS = INPUT;
+  SCL_TRIS = INPUT;
+}
 
-  /* Start condition on the EEPROM v4 I2C bus or on the external v3 I2C bus. */
-  I2C1CONbits.SEN = ON;
+static bool hardware_i2c_wait(uint16_t con_busy, uint16_t stat_busy,
+                              uint16_t stat_required) {
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  uint16_t waited;
+  if (hardware_i2c_error) {
+    return false;
+  }
+  for (waited = 0; waited < I2C_HW_TIMEOUT; waited++) {
+    uint16_t status = *bus.stat;
+    uint16_t control = *bus.con;
+    if ((status & I2C_HW_ERRORS) || !(control & _I2C1CON_I2CEN_MASK)) {
+      break;
+    }
+    if (!(control & con_busy) && !(status & stat_busy) &&
+        (status & stat_required) == stat_required) {
+      return true;
+    }
+    delay_short_inline(1);
+  }
+  hardware_i2c_abort();
+  return false;
+}
 
-  while (I2C1CONbits.SEN == ON) {
+static bool hardware_i2c_wait_idle_lines(void) {
+  uint16_t waited;
+  for (waited = 0; waited < I2C_HW_TIMEOUT; waited++) {
+#ifdef BUSPIRATEV4
+    if (i2c_state.to_eeprom ? (BP_EE_SCL && BP_EE_SDA) : (BP_CLK && BP_MOSI)) {
+#else
+    if (BP_CLK && BP_MOSI) {
+#endif
+      return true;
+    }
+    delay_short_inline(1);
+  }
+  hardware_i2c_abort();
+  return false;
+}
+
+static bool hardware_i2c_wait_gpio_high(uint16_t pin) {
+  uint16_t waited;
+  for (waited = 0; waited < I2C_HW_TIMEOUT; waited++) {
+    if (IOPOR & pin) {
+      return true;
+    }
+    delay_short_inline(1);
+  }
+  hardware_i2c_abort();
+  return false;
+}
+
+static bool hardware_i2c_bus_clear(void) {
+  uint16_t clock = CLK;
+  uint16_t data = MOSI;
+  uint8_t pulse;
+#ifdef BUSPIRATEV4
+  if (i2c_state.to_eeprom) {
+    clock = (1U << 10);
+    data = (1U << 9);
+  }
+#endif
+  /* A new START after a fault requests recovery of this single-master bus.
+     SHT3x-DIS 4.9 specifies nine released-SDA clocks
+     to reset an interface stranded mid-read, followed by a new START. */
+  IODIR |= clock | data;
+  IOLAT &= ~(clock | data);
+  if (!hardware_i2c_wait_gpio_high(clock)) {
+    return false;
+  }
+  if (IOPOR & data) {
+    return true;
+  }
+  for (pulse = 0; pulse < 9; pulse++) {
+    IODIR &= ~clock;
+    delay_short_inline(5);
+    IODIR |= clock;
+    if (!hardware_i2c_wait_gpio_high(clock)) {
+      return false;
+    }
+    delay_short_inline(5);
+  }
+  if (!(IOPOR & data)) {
+    hardware_i2c_abort();
+    return false;
+  }
+  IODIR &= ~clock;
+  IODIR &= ~data;
+  delay_short_inline(5);
+  IODIR |= clock;
+  if (!hardware_i2c_wait_gpio_high(clock)) {
+    return false;
+  }
+  delay_short_inline(5);
+  IODIR |= data;
+  delay_short_inline(5);
+  return true;
+}
+
+void hardware_i2c_start(void) {
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  if (hardware_i2c_error && !hardware_i2c_bus_clear()) {
+    return;
+  }
+  if (hardware_i2c_error || !(*bus.con & _I2C1CON_I2CEN_MASK)) {
+    hardware_i2c_setup();
+  }
+  if (!hardware_i2c_wait(I2C_HW_SEQUENCES, _I2C1STAT_TRSTAT_MASK, 0)) {
+    return;
+  }
+  if (!hardware_i2c_active && !hardware_i2c_wait_idle_lines()) {
+    return;
+  }
+  *bus.con |= hardware_i2c_active ? _I2C1CON_RSEN_MASK : _I2C1CON_SEN_MASK;
+  if (hardware_i2c_wait(I2C_HW_SEQUENCES, 0, 0)) {
+    hardware_i2c_active = true;
   }
 }
 
 void hardware_i2c_stop(void) {
-
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    /* Stop condition on the external v4 I2C bus. */
-    I2C3CONbits.PEN = ON;
-    while (I2C3CONbits.PEN == ON) {
-    }
-
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  if (!hardware_i2c_wait(I2C_HW_SEQUENCES, _I2C1STAT_TRSTAT_MASK, 0)) {
     return;
   }
-#endif /* BUSPIRATEV4 */
-
-  /* Stop condition on the EEPROM v4 I2C bus or on the external v3 I2C bus. */
-  I2C1CONbits.PEN = ON;
-
-  while (I2C1CONbits.PEN == ON) {
+  *bus.con |= _I2C1CON_PEN_MASK;
+  if (hardware_i2c_wait(_I2C1CON_PEN_MASK, 0, 0)) {
+    hardware_i2c_active = false;
   }
 }
 
 bool hardware_i2c_get_ack(void) {
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    /* Return the acknowledge status bit for the external v4 I2C bus. */
-    return I2C3STATbits.ACKSTAT;
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  return hardware_i2c_error || ((*bus.stat & _I2C1STAT_ACKSTAT_MASK) != 0);
+}
+
+static bool hardware_i2c_ready(void) {
+  if (!hardware_i2c_active) {
+    hardware_i2c_abort();
+    return false;
   }
-#endif /* BUSPIRATEV4 */
-
-/*
- * Return the acknowledge status bit for the EEPROM v4 I2C bus or for the
- * external v3 I2C bus.
- */
-
-#if defined(BUSPIRATEV3) && !defined(BPV3_IS_REV_B4_OR_LATER)
-
-  /*
-   * This is probably just being paranoid as ACKSTAT is on the upper byte of
-   * I2C1STAT.  However, since the amount of boards with older MCUs is set to
-   * dwindle as time goes by this is not going to be much of an issue.
-   */
-
-  /*
-   * PIC24FJ64GA004 Errata - item #26:
-   *
-   * Bit and byte-based operations may not have the intended affect on the
-   * I2CxSTAT register. It is possible for bit and byte operations, performed
-   * on the lower byte of I2CxSTAT, to clear the BCL bit (I2CxSTAT<10>). Bit
-   * and byte operation performed on the upper byte of I2CxSTAT, or on the
-   * BCL bit directly, may not be able to clear the BCL bit.
-   */
-
-  /*
-   * MSB
-   * ?x---xxxxxxxxxxx
-   * |
-   * +-----------------> ACKSTAT: Acknowledge status bit.
-   */
-  return (I2C1STAT & (1 << 15)) == (1 << 15);
-#else
-  return I2C1STATbits.ACKSTAT;
-#endif /* BUSPIRATEV3 && !BPV3_IS_REV_B4_OR_LATER */
+  return hardware_i2c_wait(I2C_HW_SEQUENCES,
+                           _I2C1STAT_TRSTAT_MASK | _I2C1STAT_TBF_MASK, 0);
 }
 
 void hardware_i2c_send_ack(bool ack) {
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    I2C3CONbits.ACKDT = ack;
-    I2C3CONbits.ACKEN = ON;
-    while (I2C3CONbits.ACKEN == ON) {
-    }
-
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  if (!hardware_i2c_ready()) {
     return;
   }
-#endif /* BUSPIRATEV4 */
-
-  I2C1CONbits.ACKDT = ack;
-  I2C1CONbits.ACKEN = ON;
-
-  while (I2C1CONbits.ACKEN == ON) {
-  }
+  *bus.con = (*bus.con & ~_I2C1CON_ACKDT_MASK) |
+             (ack ? _I2C1CON_ACKDT_MASK : 0) | _I2C1CON_ACKEN_MASK;
+  hardware_i2c_wait(_I2C1CON_ACKEN_MASK, 0, 0);
 }
 
 void hardware_i2c_write(const uint8_t value) {
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    I2C3TRN = value;
-    while (I2C3STATbits.TRSTAT == ON) {
-    }
-
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  if (!hardware_i2c_ready()) {
     return;
   }
-#endif /* BUSPIRATEV4 */
-
-  I2C1TRN = value;
-
-#if defined(BUSPIRATEV3) && !defined(BPV3_IS_REV_B4_OR_LATER)
-
-  /*
-   * This is probably just being paranoid as TRSTAT is on the upper byte of
-   * I2C1STAT.  However, since the amount of boards with older MCUs is set to
-   * dwindle as time goes by this is not going to be much of an issue.
-   */
-
-  /*
-   * PIC24FJ64GA004 Errata - item #26:
-   *
-   * Bit and byte-based operations may not have the intended affect on the
-   * I2CxSTAT register. It is possible for bit and byte operations, performed
-   * on the lower byte of I2CxSTAT, to clear the BCL bit (I2CxSTAT<10>). Bit
-   * and byte operation performed on the upper byte of I2CxSTAT, or on the
-   * BCL bit directly, may not be able to clear the BCL bit.
-   */
-
-  /*
-   * MSB
-   * x?---xxxxxxxxxxx
-   *  |
-   *  +----------------> TRSTAT: Transmit status bit.
-   */
-  while ((I2C1STAT & (1 << 14)) == (1 << 14)) {
-  }
-
-#else
-
-  while (I2C1STATbits.TRSTAT == ON) {
-  }
-
-#endif /* BUSPIRATEV3 && !BPV3_IS_REV_B4_OR_LATER */
+  *bus.trn = value;
+  hardware_i2c_wait(0, _I2C1STAT_TRSTAT_MASK | _I2C1STAT_TBF_MASK, 0);
 }
 
 uint8_t hardware_i2c_read(void) {
-#if defined(BUSPIRATEV4)
-  if (!i2c_state.to_eeprom) {
-    I2C3CONbits.RCEN = ON;
-    while (I2C3CONbits.RCEN == ON) {
-    }
-
-    return I2C3RCV;
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  if (!hardware_i2c_ready()) {
+    return 0xFF;
   }
-#endif /* BUSPIRATEV4 */
-
-  I2C1CONbits.RCEN = ON;
-
-  while (I2C1CONbits.RCEN == ON) {
+  *bus.con |= _I2C1CON_RCEN_MASK;
+  if (!hardware_i2c_wait(_I2C1CON_RCEN_MASK, 0, _I2C1STAT_RBF_MASK)) {
+    return 0xFF;
   }
-
-  return I2C1RCV;
+  return *bus.rcv;
 }
 
 void hardware_i2c_setup(void) {
-#if defined(BUSPIRATEV4)
-
-  /*
-   * I2C3CON: I2C3 CONTROL REGISTER
-   *
-   * MSB
-   * x-x0x0x0xxxxxxxx
-   *    | | |
-   *    | | +------------ SMEN:  Disable SMBus support.
-   *    | +-------------- A10M:  Use 7-bit slave addresses.
-   *    +---------------- SCREL: Enable clock stretching.
-   *
-   */
-  I2C3CON &= ~(_I2C3CON_A10M_MASK | _I2C3CON_SCLREL_MASK | _I2C3CON_SMEN_MASK);
-
-  /* General call address. */
-  I2C3ADD = 0;
-
-  /* Do not mask address bits. */
-  I2C3MSK = 0;
-
-  /* Set the I2C baud rate generator speed. */
-  I2C3BRG = hardware_i2c_brg();
-
-  /* Enable the I2C module. */
-  I2C3CONbits.I2CEN = ON;
-
+  hardware_i2c_registers_t bus = hardware_i2c_registers();
+  hardware_i2c_error = false;
+  hardware_i2c_active = false;
+  *bus.con = 0;
+  (void)*bus.rcv;
+  *bus.stat = 0;
+  /* SCLREL is a slave-only control. SMEN=0 selects I2C input thresholds.
+     Set slew explicitly: disabled at 100 kHz, enabled for faster profiles. */
+  *bus.con = _I2C1CON_SCLREL_MASK |
+             (mode_configuration.speed == 0 ? _I2C1CON_DISSLW_MASK : 0);
+#ifdef BUSPIRATEV4
+  if (!i2c_state.to_eeprom) {
+    I2C3ADD = 0;
+    I2C3MSK = 0;
+    I2C3BRG = hardware_i2c_brg();
+  } else {
+    I2C1ADD = 0;
+    I2C1MSK = 0;
+    I2C1BRG = hardware_i2c_brg();
+  }
 #else
-
-  /* General call address. */
   I2C1ADD = 0;
-
-  /* Do not mask address bits. */
   I2C1MSK = 0;
-
-  /* Set the I2C baud rate generator speed. */
   I2C1BRG = hardware_i2c_brg();
-
-  /*
-   * I2C1CON: I2C1 CONTROL REGISTER
-   *
-   * MSB
-   * x-x0x0x0xxxxxxxx
-   *    | | |
-   *    | | +------------ SMEN:  Disable SMBus support.
-   *    | +-------------- A10M:  Use 7-bit slave addresses.
-   *    +---------------- SCREL: Enable clock stretching.
-   *
-   */
-  I2C1CON &= ~(_I2C1CON_A10M_MASK | _I2C1CON_SCLREL_MASK | _I2C1CON_SMEN_MASK);
-
 #if !defined(BPV3_IS_REV_B4_OR_LATER)
-
-  /*
-   * PIC24FJ64GA004 Errata - item #10:
-   *
-   * When using I2C1, the SDA1 line state may not be detected properly unless
-   * it is first held low for 150ns after enabling the I2C module.
-   *
-   * In Master mode, this error may cause a bus collision to occur instead of
-   * a Start bit transmission. Transmissions after the SDA1 pin that have
-   * been held low will occur correctly.
-   *
-   * In Slave mode, the device may not Acknowledge the first packet sent after
-   * enabling the I2C module. In this case, it will return a NACK instead of
-   * an ACK. The device will correctly respond to packets after detecting a
-   * low level on the line for 150ns.
-   *
-   * From the errata workaround section:
-   *
-   * If no external devices or additional I/O pins are available, it is
-   * sometimes possible to perform the work around internally, using the
-   * following steps:
-   *
-   * * With the module in Master mode, configure the RB9 pin as an output.
-   * * Clear the LATB9 bit (for the default I2C1 assignment) or LATB5 (for the
-   *   alternate I2C1 assignment) to drive the pin low.
-   * * Enable I2C1 by setting the I2CENbit (I2C1CON<15>).
-   */
-
+  /* DS39881 errata #10: hold SDA low across module enable. */
   BP_MOSI_DIR = OUTPUT;
   bp_delay_us(200);
   LATBbits.LATB9 = OFF;
   bp_delay_us(200);
-
-#endif /* !BPV3_IS_REV_B4_OR_LATER */
-
-  /* Enable the I2C module. */
-  I2C1CONbits.I2CEN = ON;
-
-#endif /* BUSPIRATEV4 */
+#endif
+#endif
+  *bus.con |= _I2C1CON_I2CEN_MASK;
 }
 
 #endif /* BP_I2C_USE_HW_BUS */
@@ -962,7 +986,7 @@ void i2c_sniffer(bool interactive_mode) {
 
 void handle_pending_ack(const bool bus_bit) {
   if (i2c_state.mode == I2C_TYPE_SOFTWARE) {
-    bitbang_write_bit(bus_bit);
+    bitbang_i2c_write_bit(bus_bit);
   } else {
 #ifdef BP_I2C_USE_HW_BUS
     hardware_i2c_send_ack(bus_bit);
@@ -1028,6 +1052,7 @@ void binary_io_enter_i2c_mode(void) {
   mode_configuration.high_impedance = ON;
   mode_configuration.little_endian = NO;
   bitbang_setup(2, BITBANG_SPEED_MAXIMUM);
+  bitbang_i2c_clear_error();
   MSG_I2C_MODE_IDENTIFIER;
 
   for (;;) {
@@ -1047,27 +1072,33 @@ void binary_io_enter_i2c_mode(void) {
         break;
 
       case 2: // I2C start bit
-        bitbang_i2c_start(BITBANG_I2C_START_ONE_SHOT);
-        REPORT_IO_SUCCESS();
+        bitbang_i2c_clear_error();
+        user_serial_transmit_character(
+            bitbang_i2c_start_wait(BITBANG_I2C_START_ONE_SHOT));
         break;
 
       case 3: // I2C stop bit
-        bitbang_i2c_stop();
-        REPORT_IO_SUCCESS();
+        bitbang_i2c_clear_error();
+        user_serial_transmit_character(bitbang_i2c_stop_wait());
         break;
 
       case 4: // I2C read byte
+        bitbang_i2c_clear_error();
         user_serial_transmit_character(bitbang_read_value(true));
         break;
 
       case 6: // I2C send ACK
-        bitbang_write_bit(LOW);
-        REPORT_IO_SUCCESS();
+        bitbang_i2c_clear_error();
+        user_serial_transmit_character(bitbang_i2c_write_bit(LOW));
         break;
 
       case 7: // I2C send NACK
-        bitbang_write_bit(HIGH);
-        REPORT_IO_SUCCESS();
+        bitbang_i2c_clear_error();
+        user_serial_transmit_character(bitbang_i2c_write_bit(HIGH));
+        break;
+
+      case 0x0A: // Last bus operation status (read-byte framing stays compatible)
+        user_serial_transmit_character(!bitbang_i2c_error());
         break;
 
       case 8: // write-then-read
@@ -1143,6 +1174,7 @@ void binary_io_enter_i2c_mode(void) {
       break;
 
     case 0b0001:            // get x+1 bytes
+      bitbang_i2c_clear_error();
       inByte &= 0b00001111; // clear command portion
       inByte++;             // increment by 1, 0=1byte
       REPORT_IO_SUCCESS();
@@ -1185,6 +1217,7 @@ void binary_io_enter_i2c_mode(void) {
 }
 
 bool i2c_write_then_read(void) {
+  bitbang_i2c_clear_error();
   /* Read the amount of bytes to write. */
   size_t bytes_to_write = user_serial_read_big_endian_word();
 
@@ -1202,7 +1235,8 @@ bool i2c_write_then_read(void) {
     return false;
   }
 
-  if ((bytes_to_write == 0) && (bytes_to_read == 0)) {
+  /* The payload must include an address, even for a read-only transaction. */
+  if (bytes_to_write == 0) {
     return false;
   }
 
@@ -1217,7 +1251,9 @@ bool i2c_write_then_read(void) {
   i2c_address = bus_pirate_configuration.terminal_input[0];
 
   /* Signal write start. */
-  bitbang_i2c_start(BITBANG_I2C_START_ONE_SHOT);
+  if (!bitbang_i2c_start_wait(BITBANG_I2C_START_ONE_SHOT)) {
+    return false;
+  }
 
   /* Write the payload to the I2C bus. */
   for (size_t index = 0; index < bytes_to_write; index++) {
@@ -1225,20 +1261,22 @@ bool i2c_write_then_read(void) {
 
     if (bitbang_read_bit(true) == HIGH) {
       /* No ACK read on the bus, bailing out. */
-      return false;
+      goto abort_transfer;
     }
   }
 
   if ((bytes_to_read > 0) && (bytes_to_write > 1)) {
     /* Send a restart signal on the I2C bus. */
-    bitbang_i2c_start(BITBANG_I2C_RESTART);
+    if (!bitbang_i2c_start_wait(BITBANG_I2C_RESTART)) {
+      goto abort_transfer;
+    }
 
     /* Send the I2C address. */
     bitbang_write_value(i2c_address | 0x01, true);
 
     if (bitbang_read_bit(true) == HIGH) {
       /* No ACK read on the bus, bailing out. */
-      return false;
+      goto abort_transfer;
     }
   }
 
@@ -1249,12 +1287,20 @@ bool i2c_write_then_read(void) {
     /* Read the byte from the I2C bus. */
     bus_pirate_configuration.terminal_input[index] = bitbang_read_value(true);
 
+    if (bitbang_i2c_error()) {
+      goto abort_transfer;
+    }
+
     /* Report ACK or NACK depending on the length. */
-    bitbang_write_bit(index >= bytes_to_write ? HIGH : LOW);
+    if (!bitbang_i2c_write_bit(index >= bytes_to_write ? HIGH : LOW)) {
+      goto abort_transfer;
+    }
   }
 
   /* Stop the I2C bus operations. */
-  bitbang_i2c_stop();
+  if (!bitbang_i2c_stop_wait()) {
+    goto abort_transfer;
+  }
 
   /* Report operation status. */
   REPORT_IO_SUCCESS();
@@ -1263,6 +1309,13 @@ bool i2c_write_then_read(void) {
   bp_write_buffer(&bus_pirate_configuration.terminal_input[0], bytes_to_read);
 
   return true;
+
+abort_transfer:
+  /* A timeout has already released both pins. A slave NACK still needs STOP. */
+  if (!bitbang_i2c_error()) {
+    bitbang_i2c_stop_wait();
+  }
+  return false;
 }
 
 #endif /* BP_ENABLE_I2C_SUPPORT */
