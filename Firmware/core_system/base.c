@@ -121,8 +121,8 @@ static void print_decimal(const uint32_t value, const uint32_t denominator,
  * @brief Prints a 16-bit value as a decimal number, no leading zeroes.
  *
  * Every division/modulus here has the literal 10 as its divisor, so each
- * one is folded into a multiply+shift at compile time - the PIC24 core
- * has no hardware divide (DS70000157G).  This carries every byte/word
+ * one is folded into a multiply+shift at compile time, avoiding the
+ * iterative DIV/REPEAT sequence (DS70000157G). This carries every byte/word
  * display: only the rare 32-bit paths (dword, timer) still use the
  * runtime division helper.
  *
@@ -164,6 +164,10 @@ void delay_short(uint16_t microseconds);
 #endif /* BP_USE_HARDWARE_DELAY_TIMER */
 
 void clear_mode_configuration(void) {
+  mode_configuration.numbits = 8;
+  mode_configuration.int16 = NO;
+  mode_configuration.write_with_read = NO;
+  mode_configuration.command_error = NO;
   mode_configuration.high_impedance = OFF;
   mode_configuration.speed = 0;
   mode_configuration.periodicService = OFF;
@@ -242,39 +246,39 @@ void bp_write_formatted_integer(const uint16_t value) {
   uint16_t integer;
 
   integer = (mode_configuration.numbits < 16)
-                ? MASKBOTTOM16(value, mode_configuration.numbits)
+                ? value & ((1u << mode_configuration.numbits) - 1u)
                 : value;
 
   switch (bus_pirate_configuration.display_mode) {
   case HEX:
     if (mode_configuration.int16 == YES) {
-      bp_write_hex_word(value);
+      bp_write_hex_word(integer);
     } else {
-      bp_write_hex_byte(value);
+      bp_write_hex_byte(integer);
     }
     break;
 
   case DEC:
     if (mode_configuration.int16 == YES) {
-      bp_write_dec_word(value);
+      bp_write_dec_word(integer);
     } else {
-      bp_write_dec_byte(value);
+      bp_write_dec_byte(integer);
     }
     break;
 
   case BIN:
     if (mode_configuration.int16 == YES) {
-      bp_write_bin_byte(value >> 8);
+      bp_write_bin_byte(integer >> 8);
       bpSP;
     }
-    bp_write_bin_byte(value & 0xFF);
+    bp_write_bin_byte(integer & 0xFF);
     break;
 
   case RAW:
     if (mode_configuration.int16 == YES) {
-      user_serial_transmit_character(value >> 8);
+      user_serial_transmit_character(integer >> 8);
     }
-    user_serial_transmit_character(value & 0xFF);
+    user_serial_transmit_character(integer & 0xFF);
     break;
   }
 }
@@ -492,7 +496,7 @@ static void print_decimal(const uint32_t value, const uint32_t denominator,
 }
 
 void bp_write_dec_dword(const uint32_t value) {
-  print_decimal(value, 10000000, 8);
+  print_decimal(value, 1000000000UL, 10);
 }
 
 void bp_write_dec_byte(const uint8_t value) { bp_write_dec_word(value); }
@@ -530,8 +534,8 @@ void bp_write_voltage(const uint16_t adc) {
    * inside an unsigned 16 bits integer.  The measurement error is less than
    * 1mV.
    *
-   * The PIC24 core has MUL but no hardware divide (DS70000157G), so carry
-   * the exact ratio as a multiply+shift: with M = 42235 and s = 16,
+   * Avoid the iterative divider/helper (DS70000157G) by carrying the
+   * exact ratio as a multiply+shift: with M = 42235 and s = 16,
    * floor(adc * M / 2^16) equals floor(adc * 29 / 45) for every 10-bit
    * ADC value 0..1023 (verified exhaustively), and the multiply is a
    * single 16x16 -> 32 mul.uu whose high word is the result.
@@ -554,7 +558,8 @@ uint16_t bp_read_from_flash(const uint16_t page, const uint16_t address) {
   uint16_t word;
 
   TBLPAG = page;
-  word = (__builtin_tblrdh(address) << 8) | __builtin_tblrdl(address);
+  /* TBLRDL already returns bits 15:0; TBLRDH is the separate upper byte. */
+  word = __builtin_tblrdl(address);
   TBLPAG = old_page;
 
   return word;
@@ -573,16 +578,9 @@ void bp_initialise_delay_timer(void) {
 #ifdef BP_USE_HARDWARE_DELAY_TIMER
 
   /*
-   * T1CON
-   *
-   * MSB
-   * 1-0------010-0-
-   * | |      ||| |
-   * | |      ||| +--- TCS:   External clock from pin.
-   * | |      ||+----- T32:   TIMER1 is not bound with TIMER2 for 32 bit mode.
-   * | |      ++------ TCKPS: 1:8 Prescaler.
-   * | +-------------- TSIDL: Continue module operation in idle mode.
-   * +---------------- TON:   Timer OFF.
+   * DS39897C 11.0: TCS=0 selects internal FOSC/2, TCKPS=01 divides by 8.
+   * At FCY=16 MHz this is two ticks/us. TON=0 initially; TSIDL, TGATE
+   * and TSYNC are clear. Timer1 has no T32 bit.
    */
   T1CON = 0x0010;
 
@@ -842,7 +840,7 @@ void user_serial_ringbuffer_flush(void) {
 
 void user_serial_ringbuffer_append(const char character) {
   if (user_serial_ringbuffer_write == user_serial_ringbuffer_read) {
-    BP_LEDMODE = LOW;
+    BP_LEDMODE_LAT = LOW;
     bus_pirate_configuration.overflow = YES;
     return;
   }
@@ -887,16 +885,16 @@ bool user_serial_check_overflow(void) { return U1STAbits.OERR; }
 void user_serial_clear_overflow(void) { U1STAbits.OERR = NO; }
 
 /* interrupt transfer related stuff */
-unsigned char __attribute__((section(".bss.filereg"))) * UART1RXBuf;
-unsigned int __attribute__((section(".bss.filereg"))) UART1RXToRecv;
-unsigned int __attribute__((section(".bss.filereg"))) UART1RXRecvd;
-unsigned char __attribute__((section(".bss.filereg"))) * UART1TXBuf;
-unsigned int __attribute__((section(".bss.filereg"))) UART1TXSent;
-unsigned int __attribute__((section(".bss.filereg"))) UART1TXAvailable;
+unsigned char __attribute__((section(".bss.filereg"))) * volatile UART1RXBuf;
+volatile unsigned int __attribute__((section(".bss.filereg"))) UART1RXToRecv;
+volatile unsigned int __attribute__((section(".bss.filereg"))) UART1RXRecvd;
+unsigned char __attribute__((section(".bss.filereg"))) * volatile UART1TXBuf;
+volatile unsigned int __attribute__((section(".bss.filereg"))) UART1TXSent;
+volatile unsigned int __attribute__((section(".bss.filereg"))) UART1TXAvailable;
 
 void user_serial_process_transmission_interrupt() {
   /* Quit early if there is nothing to transmit. */
-  if ((IEC0bits.U1TXIE == ON) || (UART1TXAvailable == UART1TXSent)) {
+  if ((IEC0bits.U1TXIE == ON) || !UART1TXBuf || (UART1TXAvailable <= UART1TXSent)) {
     return;
   }
 
@@ -915,10 +913,11 @@ void user_serial_process_transmission_interrupt() {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void) {
-  UART1RXBuf[UART1RXRecvd] = U1RXREG;
-  UART1RXRecvd++;
+  uint8_t received = U1RXREG;
+  if (UART1RXBuf && UART1RXRecvd < UART1RXToRecv)
+    UART1RXBuf[UART1RXRecvd++] = received;
 
-  if (UART1RXRecvd == UART1RXToRecv) {
+  if (!UART1RXBuf || UART1RXRecvd >= UART1RXToRecv) {
     IEC0bits.U1RXIE = NO;
   }
 
@@ -926,8 +925,8 @@ void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void) {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void) {
-  UART1TXSent++;
-  if (UART1TXSent == UART1TXAvailable) {
+  if (UART1TXSent < UART1TXAvailable) UART1TXSent++;
+  if (!UART1TXBuf || UART1TXSent >= UART1TXAvailable) {
     IEC0bits.U1TXIE = NO;
   } else {
     U1TXREG = UART1TXBuf[UART1TXSent];

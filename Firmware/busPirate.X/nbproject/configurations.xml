@@ -8,7 +8,7 @@
       <itemPath>../programmer_avrisp/avrisp_mkii.h</itemPath>
       <itemPath>../programmer_avrisp/avrisp_v2.h</itemPath>
       <itemPath>../programmer_avrisp/avrisp_xprog.h</itemPath>
-      <itemPath>../base.h</itemPath>
+      <itemPath>../core_system/base.h</itemPath>
       <itemPath>../basic.h</itemPath>
       <itemPath>../bitbang.h</itemPath>
       <itemPath>../capability_adc/adc.h</itemPath>
@@ -39,8 +39,8 @@
       <itemPath>../messages_v4.h</itemPath>
       <itemPath>../messages.h</itemPath>
       <itemPath>../protocol_binary/binary_io.h</itemPath>
-      <itemPath>../proc_menu.h</itemPath>
-      <itemPath>../core.h</itemPath>
+      <itemPath>../core_system/proc_menu.h</itemPath>
+      <itemPath>../core_system/core.h</itemPath>
 <itemPath>../protocol_uart/uart2.h</itemPath>
       <itemPath>../capability_aux/aux_pin.h</itemPath>
       <itemPath>../protocol_wire/raw_common.h</itemPath>
@@ -77,7 +77,7 @@
       <itemPath>../programmer_avrisp/avrisp_nvm_tpi.c</itemPath>
       <itemPath>../programmer_avrisp/avrisp_v2.c</itemPath>
       <itemPath>../programmer_avrisp/avrisp_xprog.c</itemPath>
-      <itemPath>../base.c</itemPath>
+      <itemPath>../core_system/base.c</itemPath>
       <itemPath>../basic.c</itemPath>
       <itemPath>../bitbang.c</itemPath>
       <itemPath>../capability_adc/adc.c</itemPath>
@@ -87,7 +87,7 @@
       <itemPath>../tool_xsvf/lenval.c</itemPath>
       <itemPath>../tool_xsvf/micro.c</itemPath>
       <itemPath>../tool_xsvf/ports.c</itemPath>
-      <itemPath>../main.c</itemPath>
+      <itemPath>../core_system/main.c</itemPath>
       <itemPath>../pc_at_keyboard.c</itemPath>
       <itemPath>../pic.c</itemPath>
 <itemPath>../protocol_wire/raw2wire.c</itemPath>
@@ -107,8 +107,8 @@
       <itemPath>../messages_v4.s</itemPath>
       <itemPath>../messages.c</itemPath>
       <itemPath>../protocol_binary/binary_io.c</itemPath>
-      <itemPath>../proc_menu.c</itemPath>
-      <itemPath>../core.c</itemPath>
+      <itemPath>../core_system/proc_menu.c</itemPath>
+      <itemPath>../core_system/core.c</itemPath>
 <itemPath>../protocol_uart/uart2.c</itemPath>
       <itemPath>../capability_aux/aux_pin.c</itemPath>
     </logicalFolder>
@@ -328,7 +328,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value=""/>
+        <property key="extra-include-directories" value="..;../core_system"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
@@ -569,7 +569,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value=""/>
+        <property key="extra-include-directories" value="..;../core_system"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>

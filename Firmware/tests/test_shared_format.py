@@ -24,8 +24,8 @@ def function(source,name):
     raise RuntimeError("Unterminated function: "+name)
 
 
-base=(ROOT/"base.c").read_text()
-menu=(ROOT/"proc_menu.c").read_text()
+base=(ROOT/"core_system/base.c").read_text()
+menu=(ROOT/"core_system/proc_menu.c").read_text()
 body="\n".join(function(base,x) for x in ("bp_write_dec_word","bp_write_dec_byte"))
 if "print_decimal16(" in body:
     body=function(base,"print_decimal16")+"\n"+body
@@ -41,6 +41,7 @@ has_defaults="setup_defaults_mode" in body
 #include <string.h>
 #define YES 1
 #define CMDLENMSK 255
+#define BP_COMMAND_BUFFER_SIZE 256
 static unsigned char cmdbuf[256];
 static unsigned cmdstart;
 static int setup_defaults_mode;

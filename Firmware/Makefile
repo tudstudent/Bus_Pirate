@@ -77,12 +77,12 @@ SOURCES := \
 	programmer_avrisp/avrisp_nvm_tpi.c \
 	programmer_avrisp/avrisp_v2.c \
 	programmer_avrisp/avrisp_xprog.c \
-	base.c \
+	core_system/base.c \
 	capability_adc/adc.c \
 	basic.c \
 	protocol_binary/binary_io.c \
 	bitbang.c \
-	core.c \
+	core_system/core.c \
 	protocol_dio/dio.c \
 	hd44780.c \
 	protocol_i2c/i2c.c \
@@ -90,12 +90,12 @@ SOURCES := \
 	tool_xsvf/lenval.c \
 	tool_xsvf/micro.c \
 	tool_xsvf/ports.c \
-	main.c \
+	core_system/main.c \
 	messages.c \
 	tool_openocd/openocd.c \
 	pc_at_keyboard.c \
 	pic.c \
-	proc_menu.c \
+	core_system/proc_menu.c \
 	protocol_wire/raw2wire.c \
 	protocol_wire/raw3wire.c \
 	capability_selftest/selftest.c \
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. \
+	-I. -Icore_system \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)

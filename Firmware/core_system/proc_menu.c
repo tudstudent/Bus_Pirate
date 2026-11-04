@@ -215,6 +215,7 @@ static void handle_end_key(void);
  * Handles the escape key being sent to the user menu.
  */
 static void handle_escape_key(void);
+static bool handle_escape_sequence(uint8_t character);
 
 /**
  * Refreshes the current mode prompt.
@@ -272,6 +273,7 @@ typedef struct {
 
   /** Binary mode entering sequence counter. */
   uint8_t binary_mode_counter;
+  uint8_t escape_state;
 
   /** Flag indicating if a potentially valid command has been entered. */
   bool command_present;
@@ -282,11 +284,40 @@ typedef struct {
  */
 static menu_state_t menu_state = {0};
 
+static void reset_terminal_state(void) {
+  bp_current_protocol()->cleanup();
+  bp_reset_board_state();
+  bp_disable_usb_led();
+  bus_pirate_configuration.quiet = NO;
+  bus_pirate_configuration.display_mode = HEX;
+#ifdef BP_ENABLE_BASIC_SUPPORT
+  bus_pirate_configuration.basic = NO;
+#endif
+  memset(&menu_state, 0, sizeof(menu_state));
+  menu_state.cursor_position = cmdend;
+  user_macro = 0;
+}
+
+static void update_binary_prefix(uint8_t character) {
+  /* Only consecutive NULs followed by raw STX may request SUMP. ANSI cursor
+   * keys and ordinary typing must not retain an old binary-entry prefix. */
+  if (character != ASCII_NUL && character != ASCII_STX)
+    menu_state.binary_mode_counter = 0;
+}
+
+static void load_user_macro(void) {
+  int index = user_macro - 1;
+  user_macro = 0;
+  if (index < 0 || index >= BP_USER_MACROS_COUNT) return;
+  for (uint16_t i = 0; i < BP_USER_MACRO_MAX_LENGTH && user_macros[index][i]; ++i)
+    handle_character(user_macros[index][i]);
+}
+
 void serviceuser(void) {
   int newstart;
   int oldstart;
   unsigned int sendw, received;
-  int repeat;
+  uint16_t repeat;
   int temp;
   int numbits;
   unsigned char oldDmode; // temporarily holds the default display mode, while a
@@ -321,16 +352,7 @@ void serviceuser(void) {
     bp_write_string(">");
     while (!menu_state.command_present) {
       if (user_macro) {
-        user_macro--;
-        temp = 0;
-        while (user_macros[user_macro][temp]) {
-          cmdbuf[cmdend] = user_macros[user_macro][temp];
-          user_serial_transmit_character(user_macros[user_macro][temp]);
-          cmdend++;
-          temp++;
-          cmdend &= CMDLENMSK;
-        }
-        user_macro = 0;
+        load_user_macro();
       }
 
       /* Handle periodic service callbacks if needed. */
@@ -342,9 +364,9 @@ void serviceuser(void) {
             bp_write_string(bp_current_protocol()->name);
             bp_write_string(">");
             if (cmdstart != cmdend) {
-              for (size_t offset = cmdstart; offset != cmdend; offset++) {
+              for (size_t offset = cmdstart; offset != cmdend;
+                   offset = (offset + 1) & CMDLENMSK) {
                 user_serial_transmit_character(cmdbuf[offset]);
-                offset &= CMDLENMSK;
               }
             }
           }
@@ -361,6 +383,10 @@ void serviceuser(void) {
       /* Process incoming byte. */
 
       uint8_t user_byte = user_serial_read_byte();
+      update_binary_prefix(user_byte);
+
+      if (menu_state.escape_state && user_byte != ASCII_ESCAPE &&
+          handle_escape_sequence(user_byte)) continue;
 
       switch (user_byte) {
 
@@ -411,9 +437,11 @@ void serviceuser(void) {
         if (menu_state.binary_mode_counter == 20) {
           enter_binary_bitbang_mode();
 #ifdef BUSPIRATEV4
-          menu_state.binary_mode_counter = 0;
-          /* Simulate reset. */
-          goto bpv4reset;
+          reset_terminal_state();
+          cmdstart = cmdend;
+          cmdbuf[cmdend] = 0;
+          print_version_info();
+          bp_write_string("HiZ>");
 #endif /* BUSPIRATEV4 */
         }
         break;
@@ -600,15 +628,8 @@ void serviceuser(void) {
       case '#':
 #ifdef BUSPIRATEV4
         MSG_RESET_MESSAGE;
-      bpv4reset:
-        /*
-         * The v3 reset lands in HiZ mode; the v4 simulated reset must
-         * do the same.  Tools expect the "HiZ>" prompt after their
-         * reset byte - flashrom's buspirate_spi init waits for exactly
-         * that string - and without this the prompt is whatever mode
-         * the terminal was last left in, making those tools fail.
-         */
-        bus_pirate_configuration.bus_mode = BP_HIZ;
+        reset_terminal_state();
+        cmdstart = (cmdend - 1) & CMDLENMSK;
         print_version_info();
 #else
         BPMSG1093;
@@ -637,7 +658,7 @@ void serviceuser(void) {
         break;
 
       case '@':
-        repeat = getrepeat() + 1;
+        repeat = (uint16_t)getrepeat() + 1u;
         while (--repeat) {
           BPMSG1095;
           echo_state(bp_aux_pin_read());
@@ -659,7 +680,7 @@ void serviceuser(void) {
         /* `d:N` takes N readings instead of one, like the `@` command above.
            Without a repeat count this runs exactly once, so the output of a
            plain `d` is unchanged. */
-        repeat = getrepeat() + 1;
+        repeat = (uint16_t)getrepeat() + 1u;
         while (--repeat) {
           bp_adc_probe();
           bpBR;
@@ -846,19 +867,9 @@ void serviceuser(void) {
         sendw = getint();
         cmdstart--;
         cmdstart &= CMDLENMSK;
-        repeat = getrepeat() + 1;
+        repeat = (uint16_t)getrepeat() + 1u;
         numbits = getnumbits();
-        if (numbits > 16) {
-          /*
-           * Reject widths above 16: the write mask starts from
-           * 1 << (numbits - 1), and the SL shift this compiles to yields
-           * 0 for counts above 15 (DS70000157G), so every bit would
-           * silently be written as 0.  (0 = not given; 1..16 = valid
-           * width.)
-           */
-          mode_configuration.command_error = YES;
-          break;
-        }
+        if (mode_configuration.command_error) break;
         if (numbits) {
           mode_configuration.numbits = numbits;
           mode_configuration.int16 = numbits > 8 ? YES : NO;
@@ -894,19 +905,9 @@ void serviceuser(void) {
 
       case 'r':
         newDmode = change_read_display();
-        repeat = getrepeat() + 1;
+        repeat = (uint16_t)getrepeat() + 1u;
         numbits = getnumbits();
-        if (numbits > 16) {
-          /*
-           * Reject widths above 16: the write mask starts from
-           * 1 << (numbits - 1), and the SL shift this compiles to yields
-           * 0 for counts above 15 (DS70000157G), so every bit would
-           * silently be written as 0.  (0 = not given; 1..16 = valid
-           * width.)
-           */
-          mode_configuration.command_error = YES;
-          break;
-        }
+        if (mode_configuration.command_error) break;
         if (numbits) {
           mode_configuration.numbits = numbits;
           mode_configuration.int16 = (numbits > 8) ? YES : NO;
@@ -984,7 +985,7 @@ if (bp_current_protocol()->clock_pulses !=
         break;
 
       case '!':
-        repeat = getrepeat() + 1;
+        repeat = (uint16_t)getrepeat() + 1u;
         BPMSG1109;
         while (--repeat) {
           echo_state(
@@ -1031,90 +1032,41 @@ if (bp_current_protocol()->clock_pulses !=
   }
 }
 
-int getint(void) // get int from user (accept decimal, hex (0x) or binairy (0b)
-{
-  int i;
-  int number;
-
-  if (setup_defaults_mode) {
-    /*
-     * A scripted mode switch must not parse whatever the command buffer
-     * happens to hold; report "no value given" so the setup code falls back
-     * to its prompts, which take their defaults.
-     */
-    return 0;
+int getint(void) {
+  if (setup_defaults_mode) return 0;
+  uint16_t number = 0, i = 0, digits = 0;
+  uint8_t radix = 10;
+  uint16_t limit = 6553;
+  uint8_t last_digit = 5;
+  bool overflow = false;
+  if (cmdbuf[cmdstart] == '0') {
+    char prefix = cmdbuf[(cmdstart + 1) & CMDLENMSK];
+    if (prefix == 'x' || prefix == 'X') {
+      radix = 16; limit = 4095; last_digit = 15; i = 2;
+    } else if (prefix == 'b' || prefix == 'B') {
+      radix = 2; limit = 32767; last_digit = 1; i = 2;
+    }
   }
-
-  i = 0;
-  number = 0;
-
-  if ((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x31) &&
-      (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) // 1-9 is for sure decimal
-  {
-    number = cmdbuf[(cmdstart + i) & CMDLENMSK] - 0x30;
-    i++;
-    while ((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) &&
-           (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) // consume all digits
-    {
-      number *= 10;
-      number += cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x30;
-      i++;
-    }
-  } else if (cmdbuf[((cmdstart + i) & CMDLENMSK)] ==
-             0x30) // 0 could be anything
-  {
-    i++;
-    if ((cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'b') ||
-        (cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'B')) {
-      i++;
-      while ((cmdbuf[((cmdstart + i) & CMDLENMSK)] == '1') ||
-             (cmdbuf[((cmdstart + i) & CMDLENMSK)] == '0')) {
-        number <<= 1;
-        number += cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x30;
-        i++;
-      }
-    } else if ((cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'x') ||
-               (cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'X')) {
-      i++;
-      while (((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) &&
-              (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) ||
-             ((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 'A') &&
-              (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 'F')) ||
-             ((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 'a') &&
-              (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 'f'))) {
-        number <<= 4;
-        if ((cmdbuf[(cmdstart + i) & CMDLENMSK] >= 0x30) &&
-            (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) {
-          number += cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x30;
-        } else {
-          cmdbuf[((cmdstart + i) & CMDLENMSK)] |= 0x20; // make it lowercase
-          number +=
-              cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x57; // 'a'-0x61+0x0a
-        }
-        i++;
-      }
-    } else if ((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) &&
-               (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) {
-      number = cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x30;
-      while (
-          (cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) &&
-          (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) // consume all digits
-      {
-        number *= 10;
-        number += cmdbuf[((cmdstart + i) & CMDLENMSK)] - 0x30;
-        i++;
-      }
-    }
-  } else // how did we come here??
-  {
+  for (; i < BP_COMMAND_BUFFER_SIZE; ++i) {
+    uint8_t c = cmdbuf[(cmdstart + i) & CMDLENMSK];
+    uint8_t digit;
+    if (c >= '0' && c <= '9') digit = c - '0';
+    else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+    else break;
+    if (digit >= radix) break;
+    if (number > limit || (number == limit && digit > last_digit)) overflow = true;
+    if (!overflow) number = number * radix + digit;
+    ++digits;
+  }
+  cmdstart = (cmdstart + i) & CMDLENMSK;
+  if (!digits || overflow || i == BP_COMMAND_BUFFER_SIZE) {
     mode_configuration.command_error = YES;
     return 0;
   }
-
-  cmdstart += i; // we used i chars
-  cmdstart &= CMDLENMSK;
-  return number;
-} // getint(void)
+  /* The existing API carries a 16-bit data pattern in int; counts validate it. */
+  return (int)number;
+}
 
 int getrepeat(void) {
   int temp;
@@ -1125,6 +1077,10 @@ int getrepeat(void) {
     temp = getint();
     cmdstart--; // to allow [6:10] (start send 6 10 times stop)
     cmdstart &= CMDLENMSK;
+    if ((uint16_t)temp == 0 || (uint16_t)temp > 32767u) {
+      mode_configuration.command_error = YES;
+      return 0;
+    }
     return temp;
   }
   return 1; // no repeat count=1
@@ -1138,6 +1094,10 @@ int getnumbits(void) {
     temp = getint();
     cmdstart = (cmdstart - 1) &
                CMDLENMSK; // to allow [6:10] (start send 6 10 times stop)
+    if ((uint16_t)temp < 1 || (uint16_t)temp > 16) {
+      mode_configuration.command_error = YES;
+      return 0;
+    }
     return temp;
   }
   return 0; // no numbits=0;
@@ -1148,6 +1108,7 @@ uint8_t change_read_display(void) {
 
   for (index = 0; index < sizeof(READ_DISPLAY_BASE); index++) {
     if (cmdbuf[(cmdstart + 1) & CMDLENMSK] == READ_DISPLAY_BASE[index]) {
+      cmdstart = (cmdstart + 1) & CMDLENMSK;
       return index + 1;
     }
   }
@@ -1177,7 +1138,12 @@ void changemode(void) {
   busmode = 0;
   cmdstart = (cmdstart + 1) & CMDLENMSK;
   consumewhitechars();
+  bool has_argument = cmdbuf[cmdstart] != 0;
   busmode = getint();
+  if (has_argument && mode_configuration.command_error) {
+    cmdstart = (cmdend - 1) & CMDLENMSK;
+    return;
+  }
 
   if (!busmode) // no argument entered
   {
@@ -1202,7 +1168,7 @@ void changemode(void) {
       bp_current_protocol()->setup_prepare();
       MSG_CLUTCH_DISENGAGED;
       if (busmode) {
-        BP_LEDMODE = 1; // mode led is on when proto >0
+        bp_enable_mode_led();
         MSG_FINISH_SETUP_PROMPT;
       }
       // bpWmessage(MSG_READY);
@@ -1211,13 +1177,13 @@ void changemode(void) {
   } else // number entered
   {
     busmode--; // save a couple of programwords to do it here :D
-    if (busmode < ENABLED_PROTOCOLS_COUNT) {
+    if (busmode >= 0 && busmode < ENABLED_PROTOCOLS_COUNT) {
       bp_current_protocol()->cleanup();
       bp_reset_board_state();
       bus_pirate_configuration.bus_mode = busmode;
       bp_current_protocol()->setup_prepare();
       if (busmode)
-        BP_LEDMODE = 1; // mode led is on when proto >0
+        bp_enable_mode_led();
       // bpWmessage(MSG_READY);
       BPMSG1085;
     } else { // bpWline("Nonexistent protocol!!");
@@ -1278,7 +1244,7 @@ int cmdhistory(void) {
   int historypos[BP_COMMAND_HISTORY_LENGTH];
 
   i = 1;
-  j = (cmdstart - 1) & CMDLENMSK;
+  j = (cmdstart - 2) & CMDLENMSK; /* Do not list the active h command itself. */
 
   while (j != cmdstart) // scroll through the whole buffer
   {
@@ -1303,11 +1269,12 @@ int cmdhistory(void) {
   }
 
   bpBR;
+  if (i == 1) return 1;
   BPMSG1115;
 
-  j = getnumber(0, 1, i, 1);
+  j = getnumber(0, 1, i - 1, 1);
 
-  if (j == -1 || !j) // x is -1, default is 0
+  if (j < 1 || j >= i) // x is -1, default is 0
   {
     bpBR;
     return 1;
@@ -1332,7 +1299,6 @@ int cmdhistory(void) {
 
 // gets number from input
 // -1 = abort (x)
-// -2 = input to much
 // 0-max return
 // x=1 exit is enabled (we don't want that in the mode changes ;)
 
@@ -1340,8 +1306,9 @@ int getnumber(int def, int min, int max,
               int x) // default, minimum, maximum, show exit option
 {
   char c;
-  char buf[6]; // max 4 digits;
+  char buf[6]; // five digits cover the positive int16 range
   int i, j, stop, temp, neg;
+  bool too_long;
 
   if (setup_defaults_mode) {
     /* Scripted setup: take the default without printing or waiting. */
@@ -1354,6 +1321,7 @@ again: // need to do it proper with whiles and ifs..
   stop = 0;
   temp = 0;
   neg = 0;
+  too_long = false;
 
   bp_write_string("\r\n(");
   if (def < 0) {
@@ -1398,10 +1366,11 @@ again: // need to do it proper with whiles and ifs..
     default:
       if ((c >= 0x30) && (c <= 0x39)) // we got a digit
       {
-        if (i > 3) // 0-9999 should be enough??
+        if (i >= 5)
         {
+          too_long = true;
           user_serial_transmit_character(BELL);
-          i = 4;
+          i = 5;
         } else {
           user_serial_transmit_character(c);
           buf[i] = c; // store user input
@@ -1415,25 +1384,23 @@ again: // need to do it proper with whiles and ifs..
   }
   bpBR;
 
+  if (too_long) { BPMSG1211; goto again; }
   if (i == 0) {
     return def; // no user input so return default option
   } else {
-    temp = 0;
+    uint32_t magnitude = 0;
     i--;
     j = i;
 
     for (; i >= 0; i--) {
-      temp *= 10;
-      temp += (buf[j - i] - 0x30);
+      magnitude = magnitude * 10u + (buf[j - i] - '0');
     }
 
-    if ((temp >= min) && (temp <= max)) {
-      if (neg) {
-        return -temp;
-      } else {
-        return temp;
-      }
-    } else { // bpWline("\r\nInvalid choice, try again\r\n");
+    if (magnitude <= (neg ? 32768UL : 32767UL)) {
+      temp = (int)(neg ? -(int32_t)magnitude : (int32_t)magnitude);
+      if (temp >= min && temp <= max) return temp;
+    }
+    {
       BPMSG1211;
       goto again;
     }
@@ -1444,7 +1411,6 @@ again: // need to do it proper with whiles and ifs..
 #ifdef BUSPIRATEV4
 // gets number from input
 // -1 = abort (x)
-// -2 = input to much
 // 0-max return
 // x=1 exit is enabled (we don't want that in the mode changes ;)
 
@@ -1455,6 +1421,7 @@ long getlong(long def, int min, long max,
   char buf[12]; // max long = 2147483647 so 10
   int i, j, stop, neg;
   long temp;
+  bool too_long;
 
 again: // need to do it proper with whiles and ifs..
 
@@ -1462,6 +1429,7 @@ again: // need to do it proper with whiles and ifs..
   stop = 0;
   temp = 0;
   neg = 0;
+  too_long = false;
 
   bp_write_string("\r\n(");
   if (def < 0) {
@@ -1508,6 +1476,7 @@ again: // need to do it proper with whiles and ifs..
       {
         if (i > 9) // 0-9999 should be enough??
         {
+          too_long = true;
           user_serial_transmit_character(BELL);
           i = 10;
         } else {
@@ -1523,25 +1492,27 @@ again: // need to do it proper with whiles and ifs..
   }
   bpBR;
 
+  if (too_long) { BPMSG1211; goto again; }
   if (i == 0) {
     return def; // no user input so return default option
   } else {
-    temp = 0;
+    uint32_t magnitude = 0;
+    bool overflow = false;
     i--;
     j = i;
 
     for (; i >= 0; i--) {
-      temp *= 10;
-      temp += (buf[j - i] - 0x30);
+      uint8_t digit = buf[j - i] - '0';
+      if (magnitude > ((neg ? 2147483648UL : 2147483647UL) - digit) / 10UL)
+        overflow = true;
+      if (!overflow) magnitude = magnitude * 10UL + digit;
     }
 
-    if ((temp >= min) && (temp <= max)) {
-      if (neg) {
-        return -temp;
-      } else {
-        return temp;
-      }
-    } else { // bpWline("\r\nInvalid choice, try again\r\n");
+    if (!overflow) {
+      temp = neg ? (long)(0UL - magnitude) : (long)magnitude;
+      if (temp >= min && temp <= max) return temp;
+    }
+    {
       BPMSG1211;
       goto again;
     }
@@ -1861,7 +1832,37 @@ void set_display_mode(void) {
   BPMSG1128;
 }
 
+#ifndef BUSPIRATEV4
+static bool wait_baud_confirmation(void) {
+#ifdef BP_USE_HARDWARE_DELAY_TIMER
+  uint32_t remaining = 10000000UL; /* Five seconds at Timer1's 2 MHz clock. */
+  uint16_t start = TMR1;
+  for (;;) {
+    if (user_serial_ready_to_read() && user_serial_read_byte() == ' ') return true;
+    uint16_t now = TMR1;
+    uint16_t elapsed = now - start;
+    if (elapsed >= remaining) return false;
+    remaining -= elapsed;
+    start = now;
+  }
+#else
+  for (uint16_t ms = 0; ms < 5000; ++ms) {
+    if (user_serial_ready_to_read() && user_serial_read_byte() == ' ') return true;
+    bp_delay_ms(1);
+  }
+  return false;
+#endif
+}
+#endif
+
 void set_baud_rate(void) {
+#ifdef BUSPIRATEV4
+  /* This changes no physical UART: CDC line coding belongs to the host. */
+  bp_write_line("USB CDC baud rate is host-controlled.");
+  cmdstart = (cmdend - 1) & CMDLENMSK;
+#else
+  uint8_t previous_speed = bus_pirate_configuration.terminal_speed;
+  uint16_t previous_brg = U1BRG;
   cmdstart = (cmdstart + 1) & CMDLENMSK;
   consumewhitechars();
   int speed = getint();
@@ -1896,12 +1897,13 @@ void set_baud_rate(void) {
   }
   user_serial_initialise();
 
-  /* Wait for space to prove valid baud rate switch. */
-  for (;;) {
-    if (user_serial_read_byte() == ' ') {
-      break;
-    }
+  if (!wait_baud_confirmation()) {
+    bus_pirate_configuration.terminal_speed = previous_speed;
+    user_serial_set_baud_rate(previous_brg);
+    user_serial_initialise();
+    bp_write_line("Baud confirmation timed out; previous rate restored.");
   }
+#endif
 }
 
 void echo_state(const uint16_t value) {
@@ -1978,6 +1980,7 @@ void convert_value(const bool reversed) {
   cmdstart = (cmdstart + 1) & CMDLENMSK;
   consumewhitechars();
   int value = getint();
+  if (mode_configuration.command_error) return;
   if (reversed) {
     value = bp_reverse_integer(value, mode_configuration.numbits);
   }
@@ -1997,7 +2000,7 @@ void remove_current_character_from_command_line(void) {
   for (size_t index = menu_state.cursor_position; index != cmdend;
        index = (index + 1) & CMDLENMSK) {
     /* Move right-hand character over their left-hand counterpart. */
-    cmdbuf[index] = cmdbuf[index + 1];
+    cmdbuf[index] = cmdbuf[(index + 1) & CMDLENMSK];
 
     /* Write the moved character. */
     user_serial_transmit_character(cmdbuf[index] ?: ' ');
@@ -2016,8 +2019,8 @@ void remove_current_character_from_command_line(void) {
 }
 
 void handle_delete(void) {
-  if (menu_state.cursor_position == cmdstart) {
-    /* Cursor at the beginning of the line - nothing to handle. */
+  if (menu_state.cursor_position == cmdend) {
+    /* There is no character after the end cursor to delete. */
     user_serial_transmit_character(BELL);
     return;
   }
@@ -2069,11 +2072,14 @@ void handle_left_arrow(void) {
 #ifdef BP_ENABLE_SUMP_SUPPORT
   if (menu_state.binary_mode_counter >= 5) {
     enter_sump_mode();
-    menu_state.binary_mode_counter = 0;
+    reset_terminal_state();
+    cmdstart = cmdend;
+    cmdbuf[cmdend] = 0;
     return;
   }
 #endif /* BP_ENABLE_SUMP_SUPPORT */
 
+  menu_state.binary_mode_counter = 0;
   if (menu_state.cursor_position != cmdstart) {
     menu_state.cursor_position = (menu_state.cursor_position - 1) & CMDLENMSK;
     MSG_CURSOR_LEFT;
@@ -2158,6 +2164,7 @@ void handle_up_arrow(void) {
         menu_state.history_entry_counter++;
 
         refresh_command_line(character_offset);
+        return;
       }
     }
   }
@@ -2184,6 +2191,7 @@ void handle_down_arrow(void) {
       if (history_entry_index == (menu_state.history_entry_counter - 1)) {
         menu_state.history_entry_counter--;
         refresh_command_line(character_offset);
+        return;
       }
     }
   }
@@ -2236,42 +2244,38 @@ void handle_end_key(void) {
 }
 
 void handle_escape_key(void) {
-  if (user_serial_read_byte() != '[') {
-    return;
-  }
+  menu_state.escape_state = 1;
+}
 
-  switch (user_serial_read_byte()) {
-  case 'D':
-    handle_left_arrow();
-    break;
-
-  case 'C':
-    handle_right_arrow();
-    break;
-
-  case 'A':
-    handle_up_arrow();
-    break;
-
-  case 'B':
-    handle_down_arrow();
-    break;
-
-  case '1':
-    if (user_serial_read_byte() == '~') {
-      handle_home_key();
+static bool handle_escape_sequence(uint8_t character) {
+  uint8_t state = menu_state.escape_state;
+  menu_state.escape_state = 0;
+  if (state == 1) {
+    if (character == '[' || character == 'O') {
+      menu_state.escape_state = 2;
+      return true;
     }
-    break;
-
-  case '4':
-    if (user_serial_read_byte() == '~') {
-      handle_end_key();
-    }
-    break;
-
-  default:
-    break;
+    return false;
   }
+  if (state == 2) {
+    switch (character) {
+    case 'A': handle_up_arrow(); return true;
+    case 'B': handle_down_arrow(); return true;
+    case 'C': handle_right_arrow(); return true;
+    case 'D': handle_left_arrow(); return true;
+    case 'H': handle_home_key(); return true;
+    case 'F': handle_end_key(); return true;
+    case '1': case '7': menu_state.escape_state = 3; return true;
+    case '4': case '8': menu_state.escape_state = 4; return true;
+    case '3': menu_state.escape_state = 5; return true;
+    default: return false;
+    }
+  }
+  if (character != '~') return false;
+  if (state == 3) handle_home_key();
+  else if (state == 4) handle_end_key();
+  else if (state == 5) handle_delete();
+  return true;
 }
 
 void handle_enter_key(void) {
@@ -2302,7 +2306,7 @@ void handle_character(const uint8_t character) {
       bp_write_string("C");
       uint16_t offset = cmdend;
       while (offset != ((menu_state.cursor_position - 1) & CMDLENMSK)) {
-        cmdbuf[offset + 1] = cmdbuf[offset];
+        cmdbuf[(offset + 1) & CMDLENMSK] = cmdbuf[offset];
         if (cmdbuf[offset]) {
           user_serial_transmit_character(cmdbuf[offset]);
           MSG_CURSOR_LEFT_TWO;
