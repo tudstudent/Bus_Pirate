@@ -35,9 +35,9 @@
       <itemPath>../protocol_jtag/jtag.h</itemPath>
       <itemPath>../capability_smps/smps.h</itemPath>
       <itemPath>../tool_openocd/openocd.h</itemPath>
-      <itemPath>../messages_v3.h</itemPath>
-      <itemPath>../messages_v4.h</itemPath>
-      <itemPath>../messages.h</itemPath>
+      <itemPath>../core_messages/messages_v3.h</itemPath>
+      <itemPath>../core_messages/messages_v4.h</itemPath>
+      <itemPath>../core_messages/messages.h</itemPath>
       <itemPath>../protocol_binary/binary_io.h</itemPath>
       <itemPath>../core_system/proc_menu.h</itemPath>
       <itemPath>../core_system/core.h</itemPath>
@@ -103,9 +103,9 @@
       <itemPath>../protocol_uart/uart.c</itemPath>
       <itemPath>../tool_openocd/openocd.c</itemPath>
       <itemPath>../tool_openocd/openocd_asm.s</itemPath>
-      <itemPath>../messages_v3.s</itemPath>
-      <itemPath>../messages_v4.s</itemPath>
-      <itemPath>../messages.c</itemPath>
+      <itemPath>../core_messages/messages_v3.s</itemPath>
+      <itemPath>../core_messages/messages_v4.s</itemPath>
+      <itemPath>../core_messages/messages.c</itemPath>
       <itemPath>../protocol_binary/binary_io.c</itemPath>
       <itemPath>../core_system/proc_menu.c</itemPath>
       <itemPath>../core_system/core.c</itemPath>
@@ -243,7 +243,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../messages_v4.h" ex="true" overriding="false">
+      <item path="../core_messages/messages_v4.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -257,7 +257,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../messages_v4.s" ex="true" overriding="false">
+      <item path="../core_messages/messages_v4.s" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -328,7 +328,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value="..;../core_system;../core_bitbang"/>
+        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
@@ -498,7 +498,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../messages_v3.h" ex="true" overriding="false">
+      <item path="../core_messages/messages_v3.h" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -512,7 +512,7 @@
         <C30Global>
         </C30Global>
       </item>
-      <item path="../messages_v3.s" ex="true" overriding="false">
+      <item path="../core_messages/messages_v3.s" ex="true" overriding="false">
         <C30>
         </C30>
         <C30-AR>
@@ -569,7 +569,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-        <property key="extra-include-directories" value="..;../core_system;../core_bitbang"/>
+        <property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>

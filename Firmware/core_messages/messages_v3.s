@@ -130,47 +130,17 @@ _BPMSG1051_str:
 _BPMSG1052_str:
 	.pasciz "Syntax error"
 
-	; BPMSG1053
-	.section .text.BPMSG1053, code
-	.global _BPMSG1053_str
-_BPMSG1053_str:
-	.pasciz "No EEPROM"
-
-	; BPMSG1054
-	.section .text.BPMSG1054, code
-	.global _BPMSG1054_str
-_BPMSG1054_str:
-	.pasciz "Erasing"
-
-	; BPMSG1055
-	.section .text.BPMSG1055, code
-	.global _BPMSG1055_str
-_BPMSG1055_str:
-	.pasciz "done"
-
-	; BPMSG1056
-	.section .text.BPMSG1056, code
-	.global _BPMSG1056_str
-_BPMSG1056_str:
-	.pasciz "Saving to slot "
-
-	; BPMSG1057
-	.section .text.BPMSG1057, code
-	.global _BPMSG1057_str
-_BPMSG1057_str:
-	.pasciz "Invalid slot"
-
-	; BPMSG1058
-	.section .text.BPMSG1058, code
-	.global _BPMSG1058_str
-_BPMSG1058_str:
-	.pasciz "Loading from slot "
-
 	; BPMSG1064
 	.section .text.BPMSG1064, code
 	.global _BPMSG1064_str
 _BPMSG1064_str:
 	.pasciz "I2C mode:\r\n 1. Software\r\n 2. Hardware"
+
+	; BPMSG1066
+	.section .text.BPMSG1066, code
+	.global _BPMSG1066_str
+_BPMSG1066_str:
+	.pasciz "WARNING: HARDWARE I2C is broken on this PIC! (REV A3)"
 
 	; BPMSG1067
 	.section .text.BPMSG1067, code
@@ -188,7 +158,7 @@ _BPMSG1068_str:
 	.section .text.BPMSG1069, code
 	.global _BPMSG1069_str
 _BPMSG1069_str:
-	.pasciz " 0.Macro menu\r\n 1.7bit address search\r\n 2.I2C sniffer\r\n 3.Connect to on-board EEPROM\r\n 4.Enable Writing the on-board EEPROM"
+	.pasciz " 0.Macro menu\r\n 1.7bit address search\r\n 2.I2C sniffer"
 
 	; BPMSG1070
 	.section .text.BPMSG1070, code
@@ -400,6 +370,12 @@ _BPMSG1123_str:
 _BPMSG1124_str:
 	.pasciz "LSB set: LEAST sig bit first"
 
+	; BPMSG1126
+	.section .text.BPMSG1126, code
+	.global _BPMSG1126_str
+_BPMSG1126_str:
+	.pasciz " Bootloader v"
+
 	; BPMSG1127
 	.section .text.BPMSG1127, code
 	.global _BPMSG1127_str
@@ -440,7 +416,7 @@ _BPMSG1137_str:
 	.section .text.BPMSG1163, code
 	.global _BPMSG1163_str
 _BPMSG1163_str:
-	.pasciz "Disconnect any devices\r\nConnect (ADC to +3.3V)"
+	.pasciz "Disconnect any devices\r\nConnect (Vpu to +5V) and (ADC to +3.3V)"
 
 	; BPMSG1164
 	.section .text.BPMSG1164, code
@@ -530,7 +506,7 @@ _BPMSG1177_str:
 	.section .text.BPMSG1178, code
 	.global _BPMSG1178_str
 _BPMSG1178_str:
-	.pasciz "MODE, VREG, and USB LEDs should be on!"
+	.pasciz "MODE and VREG LEDs should be on!"
 
 	; BPMSG1179
 	.section .text.BPMSG1179, code
@@ -658,11 +634,23 @@ _BPMSG1223_str:
 _BPMSG1226_str:
 	.pasciz "Pinstates:"
 
+	; BPMSG1227
+	.section .text.BPMSG1227, code
+	.global _BPMSG1227_str
+_BPMSG1227_str:
+	.pasciz "GND\t3.3V\t5.0V\tADC\tVPU\tAUX\t"
+
 	; BPMSG1228
 	.section .text.BPMSG1228, code
 	.global _BPMSG1228_str
 _BPMSG1228_str:
 	.pasciz "P\tP\tP\tI\tI\t"
+
+	; BPMSG1233
+	.section .text.BPMSG1233, code
+	.global _BPMSG1233_str
+_BPMSG1233_str:
+	.pasciz "1.(Br)\t2.(Rd)\t3.(Or)\t4.(Yw)\t5.(Gn)\t6.(Bu)\t7.(Pu)\t8.(Gy)\t9.(Wt)\t0.(Bk)"
 
 	; BPMSG1234
 	.section .text.BPMSG1234, code
@@ -700,227 +688,143 @@ _BPMSG1254_str:
 _BPMSG1255_str:
 	.pasciz "Servo active"
 
-	; BPMSG1256
-	.section .text.BPMSG1256, code
-	.global _BPMSG1256_str
-_BPMSG1256_str:
-	.pasciz "12.(Bk)\t11.(Wt)\t10.(Gy)\t9.(Pu)\t8.(Bu)\t7.(Gn)\t6.(Yw)\t5.(Or)\t4.(Rd)\t3.(Br)\t2.(Bk)\1.(Wt)"
-
-	; BPMSG1257
-	.section .text.BPMSG1257, code
-	.global _BPMSG1257_str
-_BPMSG1257_str:
-	.pasciz "GND\t5.0V\t3.3V\tVPU\tADC\tAUX2\tAUX1\tAUX\t"
-
-	; BPMSG1263
-	.section .text.BPMSG1263, code
-	.global _BPMSG1263_str
-_BPMSG1263_str:
-	.pasciz "a/A/@ controls AUX1 pin"
-
-	; BPMSG1264
-	.section .text.BPMSG1264, code
-	.global _BPMSG1264_str
-_BPMSG1264_str:
-	.pasciz "a/A/@ controls AUX2 pin"
-
-	; BPMSG1265
-	.section .text.BPMSG1265, code
-	.global _BPMSG1265_str
-_BPMSG1265_str:
-	.pasciz "EEPROM"
-
-	; BPMSG1266
-	.section .text.BPMSG1266, code
-	.global _BPMSG1266_str
-_BPMSG1266_str:
-	.pasciz "SCL"
-
-	; BPMSG1267
-	.section .text.BPMSG1267, code
-	.global _BPMSG1267_str
-_BPMSG1267_str:
-	.pasciz "SDA"
-
-	; BPMSG1268
-	.section .text.BPMSG1268, code
-	.global _BPMSG1268_str
-_BPMSG1268_str:
-	.pasciz "WP"
-
-	; BPMSG1269
-	.section .text.BPMSG1269, code
-	.global _BPMSG1269_str
-_BPMSG1269_str:
-	.pasciz "READ&WRITE"
-
-	; BPMSG1270
-	.section .text.BPMSG1270, code
-	.global _BPMSG1270_str
-_BPMSG1270_str:
-	.pasciz "Vusb"
-
-	; BPMSG1271
-	.section .text.BPMSG1271, code
-	.global _BPMSG1271_str
-_BPMSG1271_str:
-	.pasciz "Select Vpu (Pullup) Source:\r\n 1) External (or None)\r\n 2) Onboard 3.3v\r\n 3) Onboard 5.0v"
-
-	; BPMSG1272
-	.section .text.BPMSG1272, code
-	.global _BPMSG1272_str
-_BPMSG1272_str:
-	.pasciz " on-board pullup voltage "
-
-	; BPMSG1273
-	.section .text.BPMSG1273, code
-	.global _BPMSG1273_str
-_BPMSG1273_str:
-	.pasciz "enabled"
-
-	; BPMSG1274
-	.section .text.BPMSG1274, code
-	.global _BPMSG1274_str
-_BPMSG1274_str:
-	.pasciz "disabled"
-
 	; HLP1000
 	.section .text.HLP1000, code
 	.global _HLP1000_str
 _HLP1000_str:
-	.pasciz "General\t\t\t\t\tProtocol interaction"
+	.pasciz " General\t\t\t\t\tProtocol interaction"
 
 	; HLP1001
 	.section .text.HLP1001, code
 	.global _HLP1001_str
 _HLP1001_str:
-	.pasciz "---------------------------------------------------------------------------"
+	.pasciz " ---------------------------------------------------------------------------"
 
 	; HLP1002
 	.section .text.HLP1002, code
 	.global _HLP1002_str
 _HLP1002_str:
-	.pasciz "?\tThis help\t\t\t(0)\tList current macros"
+	.pasciz " ?\tThis help\t\t\t(0)\tList current macros"
 
 	; HLP1003
 	.section .text.HLP1003, code
 	.global _HLP1003_str
 _HLP1003_str:
-	.pasciz "=X/|X\tConverts X/reverse X\t\t(x)\tMacro x"
+	.pasciz " =X/|X\tConverts X/reverse X\t\t(x)\tMacro x"
 
 	; HLP1004
 	.section .text.HLP1004, code
 	.global _HLP1004_str
 _HLP1004_str:
-	.pasciz "~\tSelftest\t\t\t[\tStart"
+	.pasciz " ~\tSelftest\t\t\t[\tStart"
 
 	; HLP1005
 	.section .text.HLP1005, code
 	.global _HLP1005_str
 _HLP1005_str:
-	.pasciz "o\tSet output type\t\t\t]\tStop"
+	.pasciz " #\tReset the BP   \t\t\t]\tStop"
 
 	; HLP1006
 	.section .text.HLP1006, code
 	.global _HLP1006_str
 _HLP1006_str:
-	.pasciz "$\tJump to bootloader\t\t{\tStart with read"
+	.pasciz " $\tJump to bootloader\t\t{\tStart with read"
 
 	; HLP1007
 	.section .text.HLP1007, code
 	.global _HLP1007_str
 _HLP1007_str:
-	.pasciz "&/%\tDelay 1 us/ms\t\t\t}\tStop"
+	.pasciz " &/%\tDelay 1 us/ms\t\t\t}\tStop"
 
 	; HLP1008
 	.section .text.HLP1008, code
 	.global _HLP1008_str
 _HLP1008_str:
-	.pasciz "a/A/@\tAUXPIN (low/HI/READ)\t\t\"abc\"\tSend string"
+	.pasciz " a/A/@\tAUXPIN (low/HI/READ)\t\t\"abc\"\tSend string"
 
 	; HLP1009
 	.section .text.HLP1009, code
 	.global _HLP1009_str
 _HLP1009_str:
-	.pasciz "b\tSet baudrate\t\t\t123\tSend integer value"
+	.pasciz " b\tSet baudrate\t\t\t123"
 
 	; HLP1010
 	.section .text.HLP1010, code
 	.global _HLP1010_str
 _HLP1010_str:
-	.pasciz "c/C/k/K\tAUX assignment (A0/CS/A1/A2)\t0x123\tSend hex value"
+	.pasciz " c/C\tAUX assignment (aux/CS)\t\t0x123"
 
 	; HLP1011
 	.section .text.HLP1011, code
 	.global _HLP1011_str
 _HLP1011_str:
-	.pasciz "d/D\tMeasure ADC (once/CONT.)\t0b110\tSend binary value"
+	.pasciz " d/D\tMeasure ADC (once/CONT.)\t0b110\tSend value"
 
 	; HLP1012
 	.section .text.HLP1012, code
 	.global _HLP1012_str
 _HLP1012_str:
-	.pasciz "f\tMeasure frequency\t\tr\tRead"
+	.pasciz " f\tMeasure frequency\t\tr\tRead"
 
 	; HLP1013
 	.section .text.HLP1013, code
 	.global _HLP1013_str
 _HLP1013_str:
-	.pasciz "g/S\tGenerate PWM/Servo\t\t/\tCLK hi"
+	.pasciz " g/S\tGenerate PWM/Servo\t\t/\tCLK hi"
 
 	; HLP1014
 	.section .text.HLP1014, code
 	.global _HLP1014_str
 _HLP1014_str:
-	.pasciz "h\tCommandhistory\t\t\t\\\tCLK lo"
+	.pasciz " h\tCommandhistory\t\t\t\\\tCLK lo"
 
 	; HLP1015
 	.section .text.HLP1015, code
 	.global _HLP1015_str
 _HLP1015_str:
-	.pasciz "i\tVersioninfo/statusinfo\t\t^\tCLK tick"
+	.pasciz " i\tVersioninfo/statusinfo\t\t^\tCLK tick"
 
 	; HLP1016
 	.section .text.HLP1016, code
 	.global _HLP1016_str
 _HLP1016_str:
-	.pasciz "l/L\tBitorder (msb/LSB)\t\t-\tDAT hi"
+	.pasciz " l/L\tBitorder (msb/LSB)\t\t-\tDAT hi"
 
 	; HLP1017
 	.section .text.HLP1017, code
 	.global _HLP1017_str
 _HLP1017_str:
-	.pasciz "m\tChange mode\t\t\t_\tDAT lo"
+	.pasciz " m\tChange mode\t\t\t_\tDAT lo"
 
 	; HLP1018
 	.section .text.HLP1018, code
 	.global _HLP1018_str
 _HLP1018_str:
-	.pasciz "e\tSet Pullup Method\t\t.\tDAT read"
+	.pasciz " o\tSet output type\t\t\t.\tDAT read"
 
 	; HLP1019
 	.section .text.HLP1019, code
 	.global _HLP1019_str
 _HLP1019_str:
-	.pasciz "p/P\tPullup resistors (off/ON)\t!\tBit read"
+	.pasciz " p/P\tPullup resistors (off/ON)\t!\tBit read"
 
 	; HLP1020
 	.section .text.HLP1020, code
 	.global _HLP1020_str
 _HLP1020_str:
-	.pasciz "s\tScript engine\t\t\t:\tRepeat e.g. r:10"
+	.pasciz " s\tScript engine\t\t\t:\tRepeat e.g. r:10"
 
 	; HLP1021
 	.section .text.HLP1021, code
 	.global _HLP1021_str
 _HLP1021_str:
-	.pasciz "v\tShow volts/states\t\t;\tBits to read/write e.g. 0x55;2"
+	.pasciz " v\tShow volts/states\t\t;\tBits to read/write e.g. 0x55;2"
 
 	; HLP1022
 	.section .text.HLP1022, code
 	.global _HLP1022_str
 _HLP1022_str:
-	.pasciz "w/W\tPSU (off/ON)\t\t<x>/<x= >/<0>\tUsermacro x/assign x/list all"
+	.pasciz " w/W\tPSU (off/ON)\t\t<x>/<x= >/<0>\tUsermacro x/assign x/list all"
 
 	; MSG_1WIRE_ADDRESS_MACRO_HEADER
 	.section .text.MSG_1WIRE_ADDRESS_MACRO_HEADER, code
@@ -1004,7 +908,7 @@ _MSG_1WIRE_NO_DEVICE_DETECTED_str:
 	.section .text.MSG_1WIRE_PINS_STATE, code
 	.global _MSG_1WIRE_PINS_STATE_str
 _MSG_1WIRE_PINS_STATE_str:
-	.pasciz "-\t-\t-\tOWD"
+	.pasciz "-\tOWD\t-\t-"
 
 	; MSG_1WIRE_READ_ROM_MACRO_NAME
 	.section .text.MSG_1WIRE_READ_ROM_MACRO_NAME, code
@@ -1024,6 +928,12 @@ _MSG_1WIRE_SEARCH_MACRO_NAME_str:
 _MSG_1WIRE_SKIP_ROM_MACRO_NAME_str:
 	.pasciz "SKIP ROM (0xCC)"
 
+	; MSG_1WIRE_SPEED_OVERDRIVE
+	.section .text.MSG_1WIRE_SPEED_OVERDRIVE, code
+	.global _MSG_1WIRE_SPEED_OVERDRIVE_str
+_MSG_1WIRE_SPEED_OVERDRIVE_str:
+	.pasciz "1-WIRE speed: overdrive"
+
 	; MSG_1WIRE_SPEED_PROMPT
 	.section .text.MSG_1WIRE_SPEED_PROMPT, code
 	.global _MSG_1WIRE_SPEED_PROMPT_str
@@ -1035,12 +945,6 @@ _MSG_1WIRE_SPEED_PROMPT_str:
 	.global _MSG_1WIRE_SPEED_STANDARD_str
 _MSG_1WIRE_SPEED_STANDARD_str:
 	.pasciz "1-WIRE speed: standard"
-
-	; MSG_1WIRE_SPEED_OVERDRIVE
-	.section .text.MSG_1WIRE_SPEED_OVERDRIVE, code
-	.global _MSG_1WIRE_SPEED_OVERDRIVE_str
-_MSG_1WIRE_SPEED_OVERDRIVE_str:
-	.pasciz "1-WIRE speed: overdrive"
 
 	; MSG_ACK
 	.section .text.MSG_ACK, code
@@ -1072,12 +976,6 @@ _MSG_ANY_KEY_TO_EXIT_PROMPT_str:
 _MSG_BASE_CONVERTER_EQUAL_SIGN_str:
 	.pasciz " = "
 
-	; MSG_BAUD_DETECTION_SELECTED
-	.section .text.MSG_BAUD_DETECTION_SELECTED, code
-	.global _MSG_BAUD_DETECTION_SELECTED_str
-_MSG_BAUD_DETECTION_SELECTED_str:
-	.pasciz "Baud detection selected.."
-
 	; MSG_BBIO_MODE_IDENTIFIER
 	.section .text.MSG_BBIO_MODE_IDENTIFIER, code
 	.global _MSG_BBIO_MODE_IDENTIFIER_str
@@ -1090,11 +988,11 @@ _MSG_BBIO_MODE_IDENTIFIER_str:
 _MSG_BINARY_NUMBER_PREFIX_str:
 	.pasciz "0b"
 
-	; MSG_CFG0_FIELD
-	.section .text.MSG_CFG0_FIELD, code
-	.global _MSG_CFG0_FIELD_str
-_MSG_CFG0_FIELD_str:
-	.pasciz "CFG0: "
+	; MSG_CHIP_IDENTIFIER_CLONE
+	.section .text.MSG_CHIP_IDENTIFIER_CLONE, code
+	.global _MSG_CHIP_IDENTIFIER_CLONE_str
+_MSG_CHIP_IDENTIFIER_CLONE_str:
+	.pasciz " clone w/different PIC"
 
 	; MSG_CHIP_REVISION_A3
 	.section .text.MSG_CHIP_REVISION_A3, code
@@ -1102,23 +1000,41 @@ _MSG_CFG0_FIELD_str:
 _MSG_CHIP_REVISION_A3_str:
 	.pasciz "A3"
 
-	; MSG_CHIP_REVISION_A5
-	.section .text.MSG_CHIP_REVISION_A5, code
-	.global _MSG_CHIP_REVISION_A5_str
-_MSG_CHIP_REVISION_A5_str:
-	.pasciz "A5"
+	; MSG_CHIP_REVISION_B4
+	.section .text.MSG_CHIP_REVISION_B4, code
+	.global _MSG_CHIP_REVISION_B4_str
+_MSG_CHIP_REVISION_B4_str:
+	.pasciz "B4"
 
-	; MSG_CHIP_REVISION_A6
-	.section .text.MSG_CHIP_REVISION_A6, code
-	.global _MSG_CHIP_REVISION_A6_str
-_MSG_CHIP_REVISION_A6_str:
-	.pasciz "A6"
+	; MSG_CHIP_REVISION_B5
+	.section .text.MSG_CHIP_REVISION_B5, code
+	.global _MSG_CHIP_REVISION_B5_str
+_MSG_CHIP_REVISION_B5_str:
+	.pasciz "B5"
+
+	; MSG_CHIP_REVISION_B8
+	.section .text.MSG_CHIP_REVISION_B8, code
+	.global _MSG_CHIP_REVISION_B8_str
+_MSG_CHIP_REVISION_B8_str:
+	.pasciz "B8"
 
 	; MSG_CHIP_REVISION_ID_BEGIN
 	.section .text.MSG_CHIP_REVISION_ID_BEGIN, code
 	.global _MSG_CHIP_REVISION_ID_BEGIN_str
 _MSG_CHIP_REVISION_ID_BEGIN_str:
-	.pasciz " (24FJ256GB106 "
+	.pasciz " (24FJ64GA00 "
+
+	; MSG_CHIP_REVISION_ID_END_2
+	.section .text.MSG_CHIP_REVISION_ID_END_2, code
+	.global _MSG_CHIP_REVISION_ID_END_2_str
+_MSG_CHIP_REVISION_ID_END_2_str:
+	.pasciz "2 "
+
+	; MSG_CHIP_REVISION_ID_END_4
+	.section .text.MSG_CHIP_REVISION_ID_END_4, code
+	.global _MSG_CHIP_REVISION_ID_END_4_str
+_MSG_CHIP_REVISION_ID_END_4_str:
+	.pasciz "4 "
 
 	; MSG_CHIP_REVISION_UNKNOWN
 	.section .text.MSG_CHIP_REVISION_UNKNOWN, code
@@ -1130,7 +1046,7 @@ _MSG_CHIP_REVISION_UNKNOWN_str:
 	.section .text.MSG_CLEAR_LINE_WITH_CR, code
 	.global _MSG_CLEAR_LINE_WITH_CR_str
 _MSG_CLEAR_LINE_WITH_CR_str:
-	.pasciz <27>, "[2K\r"
+	.pasciz "\033[2K\r"
 
 	; MSG_CLUTCH_DISENGAGED
 	.section .text.MSG_CLUTCH_DISENGAGED, code
@@ -1154,25 +1070,25 @@ _MSG_COMMAND_HAS_NO_EFFECT_str:
 	.section .text.MSG_CURSOR_LEFT, code
 	.global _MSG_CURSOR_LEFT_str
 _MSG_CURSOR_LEFT_str:
-	.pasciz <27>, "[D"
+	.pasciz "\033[D"
 
 	; MSG_CURSOR_LEFT_TWO
 	.section .text.MSG_CURSOR_LEFT_TWO, code
 	.global _MSG_CURSOR_LEFT_TWO_str
 _MSG_CURSOR_LEFT_TWO_str:
-	.pasciz <27>, "[2D"
+	.pasciz "\033[2D"
 
 	; MSG_CURSOR_RIGHT
 	.section .text.MSG_CURSOR_RIGHT, code
 	.global _MSG_CURSOR_RIGHT_str
 _MSG_CURSOR_RIGHT_str:
-	.pasciz <27>, "[C"
+	.pasciz "\033[C"
 
 	; MSG_DESTRUCTIVE_BACKSPACE
 	.section .text.MSG_DESTRUCTIVE_BACKSPACE, code
 	.global _MSG_DESTRUCTIVE_BACKSPACE_str
 _MSG_DESTRUCTIVE_BACKSPACE_str:
-	.pasciz "\x08 \x08"
+	.pasciz "\010 \010"
 
 	; MSG_FINISH_SETUP_PROMPT
 	.section .text.MSG_FINISH_SETUP_PROMPT, code
@@ -1196,7 +1112,7 @@ _MSG_I2C_MODE_IDENTIFIER_str:
 	.section .text.MSG_I2C_PINS_STATE, code
 	.global _MSG_I2C_PINS_STATE_str
 _MSG_I2C_PINS_STATE_str:
-	.pasciz "-\t-\tSCL\tSDA"
+	.pasciz "SCL\tSDA\t-\t-"
 
 	; MSG_I2C_READ_ADDRESS_END
 	.section .text.MSG_I2C_READ_ADDRESS_END, code
@@ -1288,12 +1204,6 @@ _MSG_NACK_str:
 _MSG_NO_VOLTAGE_ON_PULLUP_PIN_str:
 	.pasciz "Warning: no voltage on Vpullup pin"
 
-	; MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED
-	.section .text.MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED, code
-	.global _MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED_str
-_MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED_str:
-	.pasciz "On-board EEPROM write protect disabled"
-
 	; MSG_OPENOCD_MODE_IDENTIFIER
 	.section .text.MSG_OPENOCD_MODE_IDENTIFIER, code
 	.global _MSG_OPENOCD_MODE_IDENTIFIER_str
@@ -1370,7 +1280,7 @@ _MSG_PIC_NO_READ_str:
 	.section .text.MSG_PIC_PINS_STATE, code
 	.global _MSG_PIC_PINS_STATE_str
 _MSG_PIC_PINS_STATE_str:
-	.pasciz "-\t-\tPGC\tPGD"
+	.pasciz "PGC\tPGD\t-\t-"
 
 	; MSG_PIC_REVISION_ID
 	.section .text.MSG_PIC_REVISION_ID, code
@@ -1546,12 +1456,6 @@ _MSG_RAW_MODE_IDENTIFIER_str:
 _MSG_READ_HEADER_str:
 	.pasciz "READ: "
 
-	; MSG_RESET_MESSAGE
-	.section .text.MSG_RESET_MESSAGE, code
-	.global _MSG_RESET_MESSAGE_str
-_MSG_RESET_MESSAGE_str:
-	.pasciz "RESET"
-
 	; MSG_SNIFFER_MESSAGE
 	.section .text.MSG_SNIFFER_MESSAGE, code
 	.global _MSG_SNIFFER_MESSAGE_str
@@ -1616,7 +1520,7 @@ _MSG_SPI_MODE_IDENTIFIER_str:
 	.section .text.MSG_SPI_PINS_STATE, code
 	.global _MSG_SPI_PINS_STATE_str
 _MSG_SPI_PINS_STATE_str:
-	.pasciz "CS\tMISO\tCLK\tMOSI"
+	.pasciz "CLK\tMOSI\tCS\tMISO"
 
 	; MSG_SPI_POLARITY_PROMPT
 	.section .text.MSG_SPI_POLARITY_PROMPT, code
@@ -1640,13 +1544,13 @@ _MSG_SPI_SPEED_PROMPT_str:
 	.section .text.MSG_UART_BAUD_CALCULATED, code
 	.global _MSG_UART_BAUD_CALCULATED_str
 _MSG_UART_BAUD_CALCULATED_str:
-	.pasciz "\n\rCalculated: \t"
+	.pasciz "\r\nCalculated: \t"
 
 	; MSG_UART_BAUD_ESTIMATED
 	.section .text.MSG_UART_BAUD_ESTIMATED, code
 	.global _MSG_UART_BAUD_ESTIMATED_str
 _MSG_UART_BAUD_ESTIMATED_str:
-	.pasciz "\n\rEstimated:  \t"
+	.pasciz "\r\nEstimated:  \t"
 
 	; MSG_UART_BAUD_OVERFLOW
 	.section .text.MSG_UART_BAUD_OVERFLOW, code
@@ -1666,12 +1570,6 @@ _MSG_UART_BITS_PARITY_PROMPT_str:
 _MSG_UART_BITS_STOP_PROMPT_str:
 	.pasciz "Stop bits:\r\n 1. 1 *default\r\n 2. 2"
 
-	; MSG_UART_DUPLEX_PROMPT
-	.section .text.MSG_UART_DUPLEX_PROMPT, code
-	.global _MSG_UART_DUPLEX_PROMPT_str
-_MSG_UART_DUPLEX_PROMPT_str:
-	.pasciz "Duplex:\r\n 1. Full (TX+RX) *default\r\n 2. Half (single wire)"
-
 	; MSG_UART_BPS_MARKER
 	.section .text.MSG_UART_BPS_MARKER, code
 	.global _MSG_UART_BPS_MARKER_str
@@ -1688,13 +1586,13 @@ _MSG_UART_BRIDGE_str:
 	.section .text.MSG_UART_BRIDGE_EXIT, code
 	.global _MSG_UART_BRIDGE_EXIT_str
 _MSG_UART_BRIDGE_EXIT_str:
-	.pasciz "Normal to exit"
+	.pasciz "Reset to exit"
 
-	; MSG_UART_CUSTOM_BAUD_RATE_PROMPT
-	.section .text.MSG_UART_CUSTOM_BAUD_RATE_PROMPT, code
-	.global _MSG_UART_CUSTOM_BAUD_RATE_PROMPT_str
-_MSG_UART_CUSTOM_BAUD_RATE_PROMPT_str:
-	.pasciz "Input a custom BAUD rate:"
+	; MSG_UART_DUPLEX_PROMPT
+	.section .text.MSG_UART_DUPLEX_PROMPT, code
+	.global _MSG_UART_DUPLEX_PROMPT_str
+_MSG_UART_DUPLEX_PROMPT_str:
+	.pasciz "Duplex:\r\n 1. Full (TX+RX) *default\r\n 2. Half (single wire)"
 
 	; MSG_UART_EARLY_EXIT
 	.section .text.MSG_UART_EARLY_EXIT, code
@@ -1730,7 +1628,7 @@ _MSG_UART_LIVE_DISPLAY_STOP_str:
 	.section .text.MSG_UART_MACRO_MENU, code
 	.global _MSG_UART_MACRO_MENU_str
 _MSG_UART_MACRO_MENU_str:
-	.pasciz " 0.Macro menu\r\n 1.Transparent bridge\r\n 2.Live monitor\r\n 3.Bridge with flow control\n\r 4.Auto Baud Detection (Activity Needed)"
+	.pasciz " 0.Macro menu\r\n 1.Transparent bridge\r\n 2.Live monitor\r\n 3.Bridge with flow control\r\n 4.Auto Baud Detection"
 
 	; MSG_UART_MODE_HEADER
 	.section .text.MSG_UART_MODE_HEADER, code
@@ -1760,13 +1658,25 @@ _MSG_UART_PARITY_ERROR_str:
 	.section .text.MSG_UART_PINS_STATE, code
 	.global _MSG_UART_PINS_STATE_str
 _MSG_UART_PINS_STATE_str:
-	.pasciz "-\tRxD\t-\tTxD"
+	.pasciz "-\tTxD\t-\tRxD"
 
 	; MSG_UART_POLARITY_PROMPT
 	.section .text.MSG_UART_POLARITY_PROMPT, code
 	.global _MSG_UART_POLARITY_PROMPT_str
 _MSG_UART_POLARITY_PROMPT_str:
 	.pasciz "Receive polarity:\r\n 1. Idle 1 *default\r\n 2. Idle 0"
+
+	; MSG_UART_POSSIBLE_OVERFLOW
+	.section .text.MSG_UART_POSSIBLE_OVERFLOW, code
+	.global _MSG_UART_POSSIBLE_OVERFLOW_str
+_MSG_UART_POSSIBLE_OVERFLOW_str:
+	.pasciz "WARNING: Possible buffer overflow"
+
+	; MSG_UART_RAW_BRG_PROMPT
+	.section .text.MSG_UART_RAW_BRG_PROMPT, code
+	.global _MSG_UART_RAW_BRG_PROMPT_str
+_MSG_UART_RAW_BRG_PROMPT_str:
+	.pasciz "Raw value for BRG (MIDI=127)"
 
 	; MSG_UART_RAW_UART_INPUT
 	.section .text.MSG_UART_RAW_UART_INPUT, code
@@ -1778,7 +1688,7 @@ _MSG_UART_RAW_UART_INPUT_str:
 	.section .text.MSG_UART_SET_PORT_SPEED, code
 	.global _MSG_UART_SET_PORT_SPEED_str
 _MSG_UART_SET_PORT_SPEED_str:
-	.pasciz "Set serial port speed: (bps)\r\n 1. 300\r\n 2. 1200\r\n 3. 2400\r\n 4. 4800\r\n 5. 9600\r\n 6. 19200\r\n 7. 38400\r\n 8. 57600\r\n 9. 115200\r\n10. Input Custom BAUD\r\n11. Auto-Baud Detection (Activity Required)"
+	.pasciz "Set serial port speed: (bps)\r\n 1. 300\r\n 2. 1200\r\n 3. 2400\r\n 4. 4800\r\n 5. 9600\r\n 6. 19200\r\n 7. 38400\r\n 8. 57600\r\n 9. 115200\r\n10. BRG raw value"
 
 	; MSG_UART_WAITING_ACTIVITY
 	.section .text.MSG_UART_WAITING_ACTIVITY, code
@@ -1792,35 +1702,11 @@ _MSG_UART_WAITING_ACTIVITY_str:
 _MSG_UNKNOWN_MACRO_ERROR_str:
 	.pasciz "Unknown macro, try ? or (0) for help"
 
-	; MSG_USING_ONBOARD_I2C_EEPROM
-	.section .text.MSG_USING_ONBOARD_I2C_EEPROM, code
-	.global _MSG_USING_ONBOARD_I2C_EEPROM_str
-_MSG_USING_ONBOARD_I2C_EEPROM_str:
-	.pasciz "Now using on-board EEPROM I2C interface"
-
 	; MSG_VOLTAGE_UNIT
 	.section .text.MSG_VOLTAGE_UNIT, code
 	.global _MSG_VOLTAGE_UNIT_str
 _MSG_VOLTAGE_UNIT_str:
 	.pasciz "V"
-
-	; MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT
-	.section .text.MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT, code
-	.global _MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT_str
-_MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT_str:
-	.pasciz "Warning: already a voltage on Vpullup pin"
-
-	; MSG_VPU_3V3_MARKER
-	.section .text.MSG_VPU_3V3_MARKER, code
-	.global _MSG_VPU_3V3_MARKER_str
-_MSG_VPU_3V3_MARKER_str:
-	.pasciz "Vpu=3V3, "
-
-	; MSG_VPU_5V_MARKER
-	.section .text.MSG_VPU_5V_MARKER, code
-	.global _MSG_VPU_5V_MARKER_str
-_MSG_VPU_5V_MARKER_str:
-	.pasciz "Vpu=5V, "
 
 	; MSG_VREG_TOO_LOW
 	.section .text.MSG_VREG_TOO_LOW, code
@@ -1839,10 +1725,3 @@ _MSG_WARNING_HEADER_str:
 	.global _MSG_WARNING_SHORT_OR_NO_PULLUP_str
 _MSG_WARNING_SHORT_OR_NO_PULLUP_str:
 	.pasciz "*Short or no pull-up "
-
-	; MSG_XSV1_MODE_IDENTIFIER
-	.section .text.MSG_XSV1_MODE_IDENTIFIER, code
-	.global _MSG_XSV1_MODE_IDENTIFIER_str
-_MSG_XSV1_MODE_IDENTIFIER_str:
-	.pasciz "XSV1"
-

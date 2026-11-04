@@ -10,8 +10,8 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/message-tests"
 OUT.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(ROOT/"messages.c", OUT/"messages.c")
-shutil.copyfile(ROOT/"messages.h", OUT/"messages.h")
+shutil.copyfile(ROOT/"core_messages/messages.c", OUT/"messages.c")
+shutil.copyfile(ROOT/"core_messages/messages.h", OUT/"messages.h")
 (OUT/"configuration.h").write_text("")
 for version in (3,4):
     (OUT/("messages_v%d.h" % version)).write_text(

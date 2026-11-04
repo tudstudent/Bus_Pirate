@@ -1,5 +1,5 @@
-#ifndef BP_MESSAGES_V3_H
-#define BP_MESSAGES_V3_H
+#ifndef BP_MESSAGES_V4_H
+#define BP_MESSAGES_V4_H
 
 void BPMSG1022_str(void);
 #define BPMSG1022 bp_message_write_buffer(__builtin_tbladdress(BPMSG1022_str))
@@ -45,10 +45,20 @@ void BPMSG1051_str(void);
 #define BPMSG1051 bp_message_write_line(__builtin_tbladdress(BPMSG1051_str))
 void BPMSG1052_str(void);
 #define BPMSG1052 bp_message_write_line(__builtin_tbladdress(BPMSG1052_str))
+void BPMSG1053_str(void);
+#define BPMSG1053 bp_message_write_line(__builtin_tbladdress(BPMSG1053_str))
+void BPMSG1054_str(void);
+#define BPMSG1054 bp_message_write_buffer(__builtin_tbladdress(BPMSG1054_str))
+void BPMSG1055_str(void);
+#define BPMSG1055 bp_message_write_line(__builtin_tbladdress(BPMSG1055_str))
+void BPMSG1056_str(void);
+#define BPMSG1056 bp_message_write_buffer(__builtin_tbladdress(BPMSG1056_str))
+void BPMSG1057_str(void);
+#define BPMSG1057 bp_message_write_line(__builtin_tbladdress(BPMSG1057_str))
+void BPMSG1058_str(void);
+#define BPMSG1058 bp_message_write_buffer(__builtin_tbladdress(BPMSG1058_str))
 void BPMSG1064_str(void);
 #define BPMSG1064 bp_message_write_line(__builtin_tbladdress(BPMSG1064_str))
-void BPMSG1066_str(void);
-#define BPMSG1066 bp_message_write_buffer(__builtin_tbladdress(BPMSG1066_str))
 void BPMSG1067_str(void);
 #define BPMSG1067 bp_message_write_buffer(__builtin_tbladdress(BPMSG1067_str))
 void BPMSG1068_str(void);
@@ -125,8 +135,6 @@ void BPMSG1123_str(void);
 #define BPMSG1123 bp_message_write_buffer(__builtin_tbladdress(BPMSG1123_str))
 void BPMSG1124_str(void);
 #define BPMSG1124 bp_message_write_buffer(__builtin_tbladdress(BPMSG1124_str))
-void BPMSG1126_str(void);
-#define BPMSG1126 bp_message_write_buffer(__builtin_tbladdress(BPMSG1126_str))
 void BPMSG1127_str(void);
 #define BPMSG1127 bp_message_write_line(__builtin_tbladdress(BPMSG1127_str))
 void BPMSG1128_str(void);
@@ -213,12 +221,8 @@ void BPMSG1223_str(void);
 #define BPMSG1223 bp_message_write_line(__builtin_tbladdress(BPMSG1223_str))
 void BPMSG1226_str(void);
 #define BPMSG1226 bp_message_write_line(__builtin_tbladdress(BPMSG1226_str))
-void BPMSG1227_str(void);
-#define BPMSG1227 bp_message_write_buffer(__builtin_tbladdress(BPMSG1227_str))
 void BPMSG1228_str(void);
 #define BPMSG1228 bp_message_write_buffer(__builtin_tbladdress(BPMSG1228_str))
-void BPMSG1233_str(void);
-#define BPMSG1233 bp_message_write_line(__builtin_tbladdress(BPMSG1233_str))
 void BPMSG1234_str(void);
 #define BPMSG1234 bp_message_write_buffer(__builtin_tbladdress(BPMSG1234_str))
 void BPMSG1245_str(void);
@@ -231,6 +235,34 @@ void BPMSG1254_str(void);
 #define BPMSG1254 bp_message_write_line(__builtin_tbladdress(BPMSG1254_str))
 void BPMSG1255_str(void);
 #define BPMSG1255 bp_message_write_line(__builtin_tbladdress(BPMSG1255_str))
+void BPMSG1256_str(void);
+#define BPMSG1256 bp_message_write_line(__builtin_tbladdress(BPMSG1256_str))
+void BPMSG1257_str(void);
+#define BPMSG1257 bp_message_write_buffer(__builtin_tbladdress(BPMSG1257_str))
+void BPMSG1263_str(void);
+#define BPMSG1263 bp_message_write_line(__builtin_tbladdress(BPMSG1263_str))
+void BPMSG1264_str(void);
+#define BPMSG1264 bp_message_write_line(__builtin_tbladdress(BPMSG1264_str))
+void BPMSG1265_str(void);
+#define BPMSG1265 bp_message_write_line(__builtin_tbladdress(BPMSG1265_str))
+void BPMSG1266_str(void);
+#define BPMSG1266 bp_message_write_buffer(__builtin_tbladdress(BPMSG1266_str))
+void BPMSG1267_str(void);
+#define BPMSG1267 bp_message_write_buffer(__builtin_tbladdress(BPMSG1267_str))
+void BPMSG1268_str(void);
+#define BPMSG1268 bp_message_write_buffer(__builtin_tbladdress(BPMSG1268_str))
+void BPMSG1269_str(void);
+#define BPMSG1269 bp_message_write_buffer(__builtin_tbladdress(BPMSG1269_str))
+void BPMSG1270_str(void);
+#define BPMSG1270 bp_message_write_buffer(__builtin_tbladdress(BPMSG1270_str))
+void BPMSG1271_str(void);
+#define BPMSG1271 bp_message_write_line(__builtin_tbladdress(BPMSG1271_str))
+void BPMSG1272_str(void);
+#define BPMSG1272 bp_message_write_buffer(__builtin_tbladdress(BPMSG1272_str))
+void BPMSG1273_str(void);
+#define BPMSG1273 bp_message_write_line(__builtin_tbladdress(BPMSG1273_str))
+void BPMSG1274_str(void);
+#define BPMSG1274 bp_message_write_line(__builtin_tbladdress(BPMSG1274_str))
 void HLP1000_str(void);
 #define HLP1000 bp_message_write_line(__builtin_tbladdress(HLP1000_str))
 void HLP1001_str(void);
@@ -311,12 +343,12 @@ void MSG_1WIRE_SEARCH_MACRO_NAME_str(void);
 #define MSG_1WIRE_SEARCH_MACRO_NAME bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SEARCH_MACRO_NAME_str))
 void MSG_1WIRE_SKIP_ROM_MACRO_NAME_str(void);
 #define MSG_1WIRE_SKIP_ROM_MACRO_NAME bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SKIP_ROM_MACRO_NAME_str))
+void MSG_1WIRE_SPEED_OVERDRIVE_str(void);
+#define MSG_1WIRE_SPEED_OVERDRIVE bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SPEED_OVERDRIVE_str))
 void MSG_1WIRE_SPEED_PROMPT_str(void);
 #define MSG_1WIRE_SPEED_PROMPT bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SPEED_PROMPT_str))
 void MSG_1WIRE_SPEED_STANDARD_str(void);
 #define MSG_1WIRE_SPEED_STANDARD bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SPEED_STANDARD_str))
-void MSG_1WIRE_SPEED_OVERDRIVE_str(void);
-#define MSG_1WIRE_SPEED_OVERDRIVE bp_message_write_line(__builtin_tbladdress(MSG_1WIRE_SPEED_OVERDRIVE_str))
 void MSG_ACK_str(void);
 #define MSG_ACK bp_message_write_buffer(__builtin_tbladdress(MSG_ACK_str))
 void MSG_ADC_VOLTAGE_PROBE_HEADER_str(void);
@@ -327,26 +359,22 @@ void MSG_ANY_KEY_TO_EXIT_PROMPT_str(void);
 #define MSG_ANY_KEY_TO_EXIT_PROMPT bp_message_write_line(__builtin_tbladdress(MSG_ANY_KEY_TO_EXIT_PROMPT_str))
 void MSG_BASE_CONVERTER_EQUAL_SIGN_str(void);
 #define MSG_BASE_CONVERTER_EQUAL_SIGN bp_message_write_buffer(__builtin_tbladdress(MSG_BASE_CONVERTER_EQUAL_SIGN_str))
+void MSG_BAUD_DETECTION_SELECTED_str(void);
+#define MSG_BAUD_DETECTION_SELECTED bp_message_write_line(__builtin_tbladdress(MSG_BAUD_DETECTION_SELECTED_str))
 void MSG_BBIO_MODE_IDENTIFIER_str(void);
 #define MSG_BBIO_MODE_IDENTIFIER bp_message_write_buffer(__builtin_tbladdress(MSG_BBIO_MODE_IDENTIFIER_str))
 void MSG_BINARY_NUMBER_PREFIX_str(void);
 #define MSG_BINARY_NUMBER_PREFIX bp_message_write_buffer(__builtin_tbladdress(MSG_BINARY_NUMBER_PREFIX_str))
-void MSG_CHIP_IDENTIFIER_CLONE_str(void);
-#define MSG_CHIP_IDENTIFIER_CLONE bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_IDENTIFIER_CLONE_str))
+void MSG_CFG0_FIELD_str(void);
+#define MSG_CFG0_FIELD bp_message_write_buffer(__builtin_tbladdress(MSG_CFG0_FIELD_str))
 void MSG_CHIP_REVISION_A3_str(void);
 #define MSG_CHIP_REVISION_A3 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_A3_str))
-void MSG_CHIP_REVISION_B4_str(void);
-#define MSG_CHIP_REVISION_B4 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_B4_str))
-void MSG_CHIP_REVISION_B5_str(void);
-#define MSG_CHIP_REVISION_B5 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_B5_str))
-void MSG_CHIP_REVISION_B8_str(void);
-#define MSG_CHIP_REVISION_B8 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_B8_str))
+void MSG_CHIP_REVISION_A5_str(void);
+#define MSG_CHIP_REVISION_A5 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_A5_str))
+void MSG_CHIP_REVISION_A6_str(void);
+#define MSG_CHIP_REVISION_A6 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_A6_str))
 void MSG_CHIP_REVISION_ID_BEGIN_str(void);
 #define MSG_CHIP_REVISION_ID_BEGIN bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_ID_BEGIN_str))
-void MSG_CHIP_REVISION_ID_END_2_str(void);
-#define MSG_CHIP_REVISION_ID_END_2 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_ID_END_2_str))
-void MSG_CHIP_REVISION_ID_END_4_str(void);
-#define MSG_CHIP_REVISION_ID_END_4 bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_ID_END_4_str))
 void MSG_CHIP_REVISION_UNKNOWN_str(void);
 #define MSG_CHIP_REVISION_UNKNOWN bp_message_write_buffer(__builtin_tbladdress(MSG_CHIP_REVISION_UNKNOWN_str))
 void MSG_CLEAR_LINE_WITH_CR_str(void);
@@ -403,6 +431,8 @@ void MSG_NACK_str(void);
 #define MSG_NACK bp_message_write_buffer(__builtin_tbladdress(MSG_NACK_str))
 void MSG_NO_VOLTAGE_ON_PULLUP_PIN_str(void);
 #define MSG_NO_VOLTAGE_ON_PULLUP_PIN bp_message_write_line(__builtin_tbladdress(MSG_NO_VOLTAGE_ON_PULLUP_PIN_str))
+void MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED_str(void);
+#define MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED bp_message_write_line(__builtin_tbladdress(MSG_ONBOARD_I2C_EEPROM_WRITE_PROTECT_DISABLED_str))
 void MSG_OPENOCD_MODE_IDENTIFIER_str(void);
 #define MSG_OPENOCD_MODE_IDENTIFIER bp_message_write_buffer(__builtin_tbladdress(MSG_OPENOCD_MODE_IDENTIFIER_str))
 void MSG_PIC_DELAY_PROMPT_str(void);
@@ -487,6 +517,8 @@ void MSG_RAW_MODE_IDENTIFIER_str(void);
 #define MSG_RAW_MODE_IDENTIFIER bp_message_write_buffer(__builtin_tbladdress(MSG_RAW_MODE_IDENTIFIER_str))
 void MSG_READ_HEADER_str(void);
 #define MSG_READ_HEADER bp_message_write_buffer(__builtin_tbladdress(MSG_READ_HEADER_str))
+void MSG_RESET_MESSAGE_str(void);
+#define MSG_RESET_MESSAGE bp_message_write_line(__builtin_tbladdress(MSG_RESET_MESSAGE_str))
 void MSG_SNIFFER_MESSAGE_str(void);
 #define MSG_SNIFFER_MESSAGE bp_message_write_line(__builtin_tbladdress(MSG_SNIFFER_MESSAGE_str))
 void MSG_SOFTWARE_MODE_SPEED_PROMPT_str(void);
@@ -525,14 +557,16 @@ void MSG_UART_BITS_PARITY_PROMPT_str(void);
 #define MSG_UART_BITS_PARITY_PROMPT bp_message_write_buffer(__builtin_tbladdress(MSG_UART_BITS_PARITY_PROMPT_str))
 void MSG_UART_BITS_STOP_PROMPT_str(void);
 #define MSG_UART_BITS_STOP_PROMPT bp_message_write_buffer(__builtin_tbladdress(MSG_UART_BITS_STOP_PROMPT_str))
-void MSG_UART_DUPLEX_PROMPT_str(void);
-#define MSG_UART_DUPLEX_PROMPT bp_message_write_buffer(__builtin_tbladdress(MSG_UART_DUPLEX_PROMPT_str))
 void MSG_UART_BPS_MARKER_str(void);
 #define MSG_UART_BPS_MARKER bp_message_write_line(__builtin_tbladdress(MSG_UART_BPS_MARKER_str))
 void MSG_UART_BRIDGE_str(void);
 #define MSG_UART_BRIDGE bp_message_write_line(__builtin_tbladdress(MSG_UART_BRIDGE_str))
 void MSG_UART_BRIDGE_EXIT_str(void);
 #define MSG_UART_BRIDGE_EXIT bp_message_write_line(__builtin_tbladdress(MSG_UART_BRIDGE_EXIT_str))
+void MSG_UART_CUSTOM_BAUD_RATE_PROMPT_str(void);
+#define MSG_UART_CUSTOM_BAUD_RATE_PROMPT bp_message_write_line(__builtin_tbladdress(MSG_UART_CUSTOM_BAUD_RATE_PROMPT_str))
+void MSG_UART_DUPLEX_PROMPT_str(void);
+#define MSG_UART_DUPLEX_PROMPT bp_message_write_buffer(__builtin_tbladdress(MSG_UART_DUPLEX_PROMPT_str))
 void MSG_UART_EARLY_EXIT_str(void);
 #define MSG_UART_EARLY_EXIT bp_message_write_line(__builtin_tbladdress(MSG_UART_EARLY_EXIT_str))
 void MSG_UART_FAILED_NO_DATA_str(void);
@@ -557,10 +591,6 @@ void MSG_UART_PINS_STATE_str(void);
 #define MSG_UART_PINS_STATE bp_message_write_line(__builtin_tbladdress(MSG_UART_PINS_STATE_str))
 void MSG_UART_POLARITY_PROMPT_str(void);
 #define MSG_UART_POLARITY_PROMPT bp_message_write_buffer(__builtin_tbladdress(MSG_UART_POLARITY_PROMPT_str))
-void MSG_UART_POSSIBLE_OVERFLOW_str(void);
-#define MSG_UART_POSSIBLE_OVERFLOW bp_message_write_line(__builtin_tbladdress(MSG_UART_POSSIBLE_OVERFLOW_str))
-void MSG_UART_RAW_BRG_PROMPT_str(void);
-#define MSG_UART_RAW_BRG_PROMPT bp_message_write_line(__builtin_tbladdress(MSG_UART_RAW_BRG_PROMPT_str))
 void MSG_UART_RAW_UART_INPUT_str(void);
 #define MSG_UART_RAW_UART_INPUT bp_message_write_line(__builtin_tbladdress(MSG_UART_RAW_UART_INPUT_str))
 void MSG_UART_SET_PORT_SPEED_str(void);
@@ -569,13 +599,23 @@ void MSG_UART_WAITING_ACTIVITY_str(void);
 #define MSG_UART_WAITING_ACTIVITY bp_message_write_line(__builtin_tbladdress(MSG_UART_WAITING_ACTIVITY_str))
 void MSG_UNKNOWN_MACRO_ERROR_str(void);
 #define MSG_UNKNOWN_MACRO_ERROR bp_message_write_line(__builtin_tbladdress(MSG_UNKNOWN_MACRO_ERROR_str))
+void MSG_USING_ONBOARD_I2C_EEPROM_str(void);
+#define MSG_USING_ONBOARD_I2C_EEPROM bp_message_write_line(__builtin_tbladdress(MSG_USING_ONBOARD_I2C_EEPROM_str))
 void MSG_VOLTAGE_UNIT_str(void);
 #define MSG_VOLTAGE_UNIT bp_message_write_buffer(__builtin_tbladdress(MSG_VOLTAGE_UNIT_str))
+void MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT_str(void);
+#define MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT bp_message_write_line(__builtin_tbladdress(MSG_VOLTAGE_VPULLUP_ALREADY_PRESENT_str))
+void MSG_VPU_3V3_MARKER_str(void);
+#define MSG_VPU_3V3_MARKER bp_message_write_buffer(__builtin_tbladdress(MSG_VPU_3V3_MARKER_str))
+void MSG_VPU_5V_MARKER_str(void);
+#define MSG_VPU_5V_MARKER bp_message_write_buffer(__builtin_tbladdress(MSG_VPU_5V_MARKER_str))
 void MSG_VREG_TOO_LOW_str(void);
 #define MSG_VREG_TOO_LOW bp_message_write_line(__builtin_tbladdress(MSG_VREG_TOO_LOW_str))
 void MSG_WARNING_HEADER_str(void);
 #define MSG_WARNING_HEADER bp_message_write_buffer(__builtin_tbladdress(MSG_WARNING_HEADER_str))
 void MSG_WARNING_SHORT_OR_NO_PULLUP_str(void);
 #define MSG_WARNING_SHORT_OR_NO_PULLUP bp_message_write_buffer(__builtin_tbladdress(MSG_WARNING_SHORT_OR_NO_PULLUP_str))
+void MSG_XSV1_MODE_IDENTIFIER_str(void);
+#define MSG_XSV1_MODE_IDENTIFIER bp_message_write_buffer(__builtin_tbladdress(MSG_XSV1_MODE_IDENTIFIER_str))
 
-#endif /* BP_MESSAGES_V3_H */
+#endif /* BP_MESSAGES_V4_H */

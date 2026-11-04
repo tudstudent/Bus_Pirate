@@ -91,7 +91,7 @@ SOURCES := \
 	tool_xsvf/micro.c \
 	tool_xsvf/ports.c \
 	core_system/main.c \
-	messages.c \
+	core_messages/messages.c \
 	tool_openocd/openocd.c \
 	pc_at_keyboard.c \
 	pic.c \
@@ -110,10 +110,10 @@ SOURCES += \
 	core_usb/cdc.c \
 	core_usb/usb_stack.c \
 	onboard_eeprom.c \
-	messages_v4.s
+	core_messages/messages_v4.s
 else
 SOURCES += \
-	messages_v3.s \
+	core_messages/messages_v3.s \
 	tool_openocd/openocd_asm.s
 endif
 
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system -Icore_bitbang \
+	-I. -Icore_system -Icore_bitbang -Icore_messages \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
