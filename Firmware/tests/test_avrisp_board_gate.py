@@ -27,7 +27,9 @@ probe = '''#include "configuration.h"
 #endif
 '''
 for cpu in ("24FJ256GB106", "24FJ64GA002"):
-    subprocess.run([compiler, "-mcpu="+cpu, "-I", str(ROOT), "-I", str(ROOT/"core_system"), "-E", "-P", "-x", "c", "-"],
+    subprocess.run([compiler, "-mcpu="+cpu, "-I", str(ROOT), "-I", str(ROOT/"core_system"),
+                    "-I", str(ROOT/"core_bitbang"), "-I", str(ROOT/"core_messages"),
+                    "-I", str(ROOT/"core_eeprom"), "-E", "-P", "-x", "c", "-"],
                    input=probe, text=True, capture_output=True, check=True)
 forced = subprocess.run([compiler, "-mcpu=24FJ64GA002", "-I", str(ROOT),
                          "-DBP_ENABLE_AVRISP_MKII_SUPPORT", "-E", "-P", "-x", "c", "-"],
@@ -36,11 +38,14 @@ assert forced.returncode != 0 and "requires Bus Pirate v4" in forced.stderr
 for source in (ROOT / "programmer_avrisp").glob("avrisp_*.c"):
     obj = OUT / (source.stem+".o")
     subprocess.run([compiler, "-mcpu=24FJ64GA002", "-O1", "-I", str(ROOT), "-I", str(ROOT/"core_system"),
+                    "-I", str(ROOT/"core_bitbang"), "-I", str(ROOT/"core_messages"),
+                    "-I", str(ROOT/"core_eeprom"),
                     "-c", str(source), "-o", str(obj)], check=True, capture_output=True)
     symbols = subprocess.run([nm, "-g", str(obj)], check=True, capture_output=True, text=True).stdout
     assert not re.search(r"\b_avrisp_", symbols), source.name
 dispatch = subprocess.run([compiler, "-mcpu=24FJ64GA002", "-I", str(ROOT),
-                           "-I", str(ROOT/"core_system"),
+                           "-I", str(ROOT/"core_system"), "-I", str(ROOT/"core_bitbang"),
+                           "-I", str(ROOT/"core_messages"), "-I", str(ROOT/"core_eeprom"),
                            "-E", "-P", str(ROOT/"protocol_binary"/"binary_io.c")],
                           check=True, capture_output=True, text=True).stdout
 assert "avrisp_mkii_enter(" not in dispatch

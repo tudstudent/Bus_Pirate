@@ -15,6 +15,8 @@ compiler = (sys.argv[1] if len(sys.argv) > 1 else str(Path(os.environ.get(
     "bin" / "xc16-gcc.exe"))
 result = subprocess.run(
     [compiler, "-mcpu=24FJ256GB106", "-std=gnu99", "-I", str(root), "-I", str(root / "core_system"),
+     "-I", str(root / "core_bitbang"), "-I", str(root / "core_messages"),
+     "-I", str(root / "core_eeprom"),
      "-E", "-P", str(root / "core_usb" / "cdc.c")],
     check=True, capture_output=True, text=True,
 )
