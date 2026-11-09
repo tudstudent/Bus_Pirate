@@ -83,7 +83,7 @@
       <itemPath>../capability_adc/adc.c</itemPath>
       <itemPath>../core_usb/cdc.c</itemPath>
       <itemPath>../protocol_dio/dio.c</itemPath>
-      <itemPath>../protocol_jtag/jtag.c</itemPath>
+<itemPath>../protocol_jtag/jtag.c</itemPath>
       <itemPath>../tool_xsvf/lenval.c</itemPath>
       <itemPath>../tool_xsvf/micro.c</itemPath>
       <itemPath>../tool_xsvf/ports.c</itemPath>
