@@ -94,7 +94,7 @@ SOURCES := \
 	core_messages/messages.c \
 	tool_openocd/openocd.c \
 	pc_at_keyboard.c \
-	pic.c \
+	programmer_pic/pic.c \
 	core_system/proc_menu.c \
 	protocol_wire/raw2wire.c \
 	protocol_wire/raw3wire.c \
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic \
+	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic -Iprogrammer_pic \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
