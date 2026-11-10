@@ -1,37 +1,41 @@
 # Shared Firmware Machinery
 
-**Requires #237 (perf/base-number-math) to be merged first.**
+The cross-mode consolidation of the live protocol descriptors, the
+spaced command-token parse, and the 16-bit decimal output. It is stacked on
+the **core starter** (#209, base `e94e0f0`); the accessors, the shared token
+wrapper and the decimal engine it builds on are carried by that core starter,
+so this note and the remaining `getint_with_spaces()` caller cleanup ride the
+`perf` family fold on top of it.
 
-This cross-mode consolidation is explicitly chained on that numeric-math
-prerequisite. The prerequisite is present in the branch history so both
-supported board builds and native tests can be verified before publication.
-After #237 merges, rebase onto the updated upstream before reviewing the
-remaining changes against the main branch.
-
-## Shared Implementations
+## Scope
 
 - `bp_current_protocol()` resolves the live mode descriptor for terminal and
   BASIC callbacks. `bp_protocol_by_index()` supports mode-menu enumeration.
-  The table is private, exposed through const pointers, and retains compact
-  initialized-data storage instead of more expensive PSV storage.
+  The descriptor table is private and exposed through const pointers, while
+  retaining the existing compact initialized-data storage.
 - `getint_with_spaces()` implements the existing consume-spaces/getint pair
-  once for mode/tool setup. Grammar, cursor/error behavior, buffer mutations
-  and existing feature flags are unchanged.
-- `bp_write_dec_word()` is the one out-of-line 16-bit decimal engine; byte
-  output delegates to it. This shares #237's literal-division algorithm
-  rather than duplicating its inline body. It does not replace the fast
-  16-bit algorithm with a generic 32-bit division loop.
+  once for mode/tool setup. Parsing grammar, buffer position and errors are
+  unchanged. Existing modes, callbacks, strings and feature flags are retained.
+- The byte/word decimal displays share one 16-bit formatter
+  (`bp_write_dec_word()`; `bp_write_dec_byte()` delegates) whose literal
+  `/10` and `%10` fold to multiply+shift on the PIC24 (no hardware divide,
+  DS70000157G). Only the rare 32-bit paths keep the runtime division helper.
 
-Existing descriptor contents, protocol callbacks, pin/clock loops, modes,
-strings and numeric output are retained. Optional callbacks introduced by
-other changes must use the same accessors rather than expose the private
-table. No C++ runtime, heap allocation or feature removal is required.
+The descriptor and decimal bodies, plus the `getint_with_spaces()` wrapper,
+are absorbed by the core starter (#209). What remains here is the caller
+cleanup that replaces the ten mode modules' `consumewhitechars(); getint();`
+pairs with the shared wrapper. Context from combined-only BASIC MODE/default
+setup, BASIC bit-order fixes and batched clock pulses is deliberately NOT
+carried.
 
 ## Building
 
-The tracked command-line Makefile mirrors the XC16 project settings and
-keeps board objects separate. XC16 v2.10 is required, either on PATH or
-selected with `XC16_DIR`.
+The core starter does not track the command-line Makefile; that build-only
+file is the `#203` CLI-Makefile work and is kept as an untracked local support
+file here (the house pattern for a family worktree), adapted to the core
+source layout (`core_system/`, `core_bitbang/`, `core_messages/`,
+`core_eeprom/`, `core_usb/`). No configuration or terminal-buffer changes
+from the later build branch are included.
 
 ```sh
 make -C Firmware BP_VERSION=V4
@@ -39,29 +43,26 @@ make -C Firmware BP_VERSION=V3
 python Firmware/tests/test_native.py
 ```
 
-Windows installations can select the shell and compiler explicitly:
+XC16 v2.10 must be installed or selected with `XC16_DIR`. On this Windows
+host the canonical equivalent is:
 
 ```powershell
 make -C Firmware BP_VERSION=V4 'SHELL=C:/Program Files/Git/usr/bin/sh.exe' 'XC16_DIR=C:/Program Files (x86)/Microchip/MPLABXC16/v2.10'
 make -C Firmware BP_VERSION=V3 'SHELL=C:/Program Files/Git/usr/bin/sh.exe' 'XC16_DIR=C:/Program Files (x86)/Microchip/MPLABXC16/v2.10'
 ```
 
-Use the same optimization level and feature flags for size comparisons.
-The decimal-sharing commit must be compared with the #237 prerequisite
-already applied, not with a different numeric implementation.
+Keep the optimization level and feature flags unchanged for size comparisons.
 
-## Native Checks
+## Tests And Limits
 
-Python 3 and host GCC compile actual production functions with small mocks.
-The battery checks live descriptor selection, all byte/word decimal values,
-parser result/cursor/error/buffer equivalence, and packed-message output,
-byte lanes, table-page crossings and page restoration.
+The native battery compiles actual production functions with host GCC and
+small mocks; generated files stay in Firmware/build. It checks live descriptor
+selection, decimal output exhaustively, parser result/cursor/error/buffer
+equivalence, and packed-message output/page handling. It detects whether
+scripted setup defaults actually exist rather than importing that feature
+just to satisfy a combined-tree fixture.
+It requires Python 3 and a host GCC in addition to XC16 for the ROM builds.
 
-The formatter fixture supports both the prerequisite's inline helper and
-the shared implementation, allowing exact before/after output checks.
-Scripted setup defaults are tested only when that feature exists; tests
-do not introduce optional production features to satisfy a fixture.
-
-Generated tests stay under `Firmware/build` and are not linked into the
-shipping image. They do not emulate USB enumeration, hardware interrupts
-or MCU-cycle timing, and do not claim electrical protocol conformance.
+These host tests do not emulate MCU timing or claim a new hardware bench of
+upstream firmware. No board flashing or target operations are needed to run
+this branch's native tests.

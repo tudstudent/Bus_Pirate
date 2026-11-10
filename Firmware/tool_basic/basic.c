@@ -1684,8 +1684,7 @@ void save(void) {
   int i, j;
   int slot;
 
-  consumewhitechars();
-  slot = getint();
+  slot = getint_with_spaces();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
@@ -1737,8 +1736,7 @@ void load(void) {
   int i;
   int slot;
 
-  consumewhitechars();
-  slot = getint();
+  slot = getint_with_spaces();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
