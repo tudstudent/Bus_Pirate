@@ -16,7 +16,7 @@
       <itemPath>../core_usb/descriptors.h</itemPath>
       <itemPath>../protocol_dio/dio.h</itemPath>
       <itemPath>../hardwarev3.h</itemPath>
-      <itemPath>../pc_at_keyboard.h</itemPath>
+<itemPath>../protocol_keyboard/pc_at_keyboard.h</itemPath>
       <itemPath>../programmer_pic/pic.h</itemPath>
       <itemPath>../core_usb/picusb.h</itemPath>
 <itemPath>../protocol_wire/raw2wire.h</itemPath>
@@ -88,7 +88,7 @@
       <itemPath>../tool_xsvf/micro.c</itemPath>
       <itemPath>../tool_xsvf/ports.c</itemPath>
       <itemPath>../core_system/main.c</itemPath>
-      <itemPath>../pc_at_keyboard.c</itemPath>
+<itemPath>../protocol_keyboard/pc_at_keyboard.c</itemPath>
 <itemPath>../programmer_pic/pic.c</itemPath>
 <itemPath>../protocol_wire/raw2wire.c</itemPath>
       <itemPath>../protocol_wire/raw3wire.c</itemPath>
@@ -328,7 +328,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-<property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom;../tool_basic;../programmer_pic"/>
+<property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom;../tool_basic;../programmer_pic;../protocol_keyboard"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
@@ -569,7 +569,7 @@
         <property key="enable-short-double" value="false"/>
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
-<property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom;../tool_basic;../programmer_pic"/>
+<property key="extra-include-directories" value="..;../core_system;../core_bitbang;../core_messages;../core_eeprom;../tool_basic;../programmer_pic;../protocol_keyboard"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="true"/>
         <property key="oXC16gcc-align-arr" value="false"/>
