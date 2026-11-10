@@ -101,7 +101,7 @@ SOURCES := \
 	capability_selftest/selftest.c \
 	capability_smps/smps.c \
 	protocol_spi/spi.c \
-	sump.c \
+	protocol_sump/sump.c \
 	protocol_uart/uart.c \
 	protocol_uart/uart2.c
 
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic -Iprogrammer_pic -Iprotocol_keyboard \
+	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic -Iprogrammer_pic -Iprotocol_keyboard -Iprotocol_sump \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
