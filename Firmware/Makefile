@@ -79,7 +79,7 @@ SOURCES := \
 	programmer_avrisp/avrisp_xprog.c \
 	core_system/base.c \
 	capability_adc/adc.c \
-	basic.c \
+	tool_basic/basic.c \
 	protocol_binary/binary_io.c \
 	core_bitbang/bitbang.c \
 	core_system/core.c \
@@ -140,7 +140,7 @@ CFLAGS := \
 	$(OPT) \
 	-finline \
 	-std=gnu99 \
-	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom \
+	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)

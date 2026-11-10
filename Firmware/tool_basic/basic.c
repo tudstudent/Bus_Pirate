@@ -119,7 +119,8 @@
  * commands) from inside a program: it yields the timer divided by 64, so
  * one unit is 64 microseconds. The 16-bit BASIC value wraps around every
  * ~4.19 seconds, so measure an interval by subtracting two readings.
- * 0xA4 here: `RESTORE` and `MODE` above took the earlier free values.
+ * 0xA4 is the next free statement token: the statement length marker starts
+ * at 0xE0.
  */
 #define TOK_TIME 0xA4
 
@@ -141,11 +142,11 @@
 #define STAT_TO "TO"
 #define STAT_NEXT "NEXT"
 #define STAT_END "END"
-#define STAT_TIME "TIME"
 #define STAT_READ "READ"
 #define STAT_DATA "DATA"
 #define STAT_RESTORE "RESTORE"
 #define STAT_MODE "MODE"
+#define STAT_TIME "TIME"
 #define STAT_START "START"
 #define STAT_STARTR "STARTR"
 #define STAT_STOP "STOP"
@@ -295,7 +296,7 @@ static char *tokens[NUMTOKEN + 1] = {
 
     STAT_MACRO, // 0xA0
     STAT_END,   // 0xA1
-STAT_RESTORE, // 0xa2
+    STAT_RESTORE, // 0xa2
     STAT_MODE,    // 0xa3
     STAT_TIME,    // 0xa4
 };
@@ -327,7 +328,7 @@ static bool search_line_number(const uint16_t line, uint16_t *result);
  * the interface with the board hardware.
  *
  * Said tokens are `RECEIVE`, `SEND`, `AUX`, `DAT`, `BITREAD`, `PSU`,
-* `PULLUP`, `ADC`, `MODE`, and `TIME`.
+ * `PULLUP`, `ADC`, `MODE`, and `TIME`.
  *
  * @param[in] token the token identifier to handle.
  *
@@ -342,7 +343,7 @@ static bool search_line_number(const uint16_t line, uint16_t *result);
  * @see TOK_PSU
  * @see TOK_PULLUP
  * @see TOK_ADC
-* @see TOK_MODE
+ * @see TOK_MODE
  * @see TOK_TIME
  */
 static uint16_t handle_special_token(const uint8_t token);
@@ -390,6 +391,46 @@ static void load(void);
 static void waiteeprom(void);
 #endif /* BP_BASIC_I2C_FILESYSTEM */
 
+/**
+ * @brief Sends a value to the bus, honouring the current LSb/MSb setting.
+ *
+ * Mirrors the interactive `8` command in proc_menu.c: when the terminal has
+ * selected least-significant-bit-first, the value is bit-reversed over the
+ * configured width before it reaches the protocol.  Both the `SEND`
+ * statement and the `SEND` expression go through here, so a script cannot
+ * get a different byte order depending on how the token is used (issue
+ * #129).
+ *
+ * @param[in] value the value to send.
+ *
+ * @return the value returned by the protocol's send callback.
+ */
+static uint16_t basic_send(uint16_t value) {
+  if (mode_configuration.little_endian == YES) {
+    value = bp_reverse_integer(value, mode_configuration.numbits);
+  }
+
+  return bp_current_protocol()->send(value);
+}
+
+/**
+ * @brief Reads a value from the bus, honouring the current LSb/MSb setting.
+ *
+ * Mirrors the interactive `r` command in proc_menu.c (issue #129).
+ *
+ * @return the value the protocol's read callback returned, bit-reversed over
+ * the configured width when least-significant-bit-first is selected.
+ */
+static uint16_t basic_receive(void) {
+  uint16_t received = bp_current_protocol()->read();
+
+  if (mode_configuration.little_endian == YES) {
+    received = bp_reverse_integer(received, mode_configuration.numbits);
+  }
+
+  return received;
+}
+
 void handle_else_statement(void) {
   if (basic_program_area[basic_program_counter] != TOK_ELSE) {
     return;
@@ -435,34 +476,11 @@ bool search_line_number(const uint16_t line, uint16_t *result) {
 uint16_t handle_special_token(const uint8_t token) {
   switch (token) {
 
-  case TOK_RECEIVE: {
-    uint16_t received = bp_current_protocol()->read();
+  case TOK_RECEIVE:
+    return basic_receive();
 
-    /*
-     * Honour the LSb/MSb setting, exactly as the interactive 'r' command
-     * does in proc_menu.c.  Without this the byte order is silently ignored
-     * in script mode (issue #129).
-     */
-    if (mode_configuration.little_endian == YES) {
-      received = bp_reverse_integer(received, mode_configuration.numbits);
-    }
-
-    return received;
-  }
-
-  case TOK_SEND: {
-    uint16_t value = (uint16_t)assign();
-
-    /*
-     * Honour the LSb/MSb setting, exactly as the interactive '8' command
-     * does in proc_menu.c (issue #129).
-     */
-    if (mode_configuration.little_endian == YES) {
-      value = bp_reverse_integer(value, mode_configuration.numbits);
-    }
-
-    return bp_current_protocol()->send(value);
-  }
+  case TOK_SEND:
+    return basic_send((uint16_t)assign());
 
   case TOK_AUX:
     return bp_aux_pin_read();
@@ -479,7 +497,7 @@ uint16_t handle_special_token(const uint8_t token) {
   case TOK_PULLUP:
     return ~BP_PULLUP;
 
-case TOK_MODE:
+  case TOK_MODE:
     /*
      * In an expression, `MODE` reports the bus mode that is currently active,
      * one-based, exactly as the mode menu numbers it.
@@ -956,14 +974,23 @@ void interpreter(void) {
 
       if (basic_data_read_pointer == 0) {
         i = 0;
+        /*
+         * Walk line headers only.  A header is a length marker > TOK_LEN
+         * whose length is marker - TOK_LEN; reading `> TOK_LEN` as the stop
+         * condition (instead of merely `!= 0`) keeps a corrupted byte below
+         * the marker from turning the step into a negative stride that would
+         * walk behind the program area - the address-error trap class of
+         * #130.  A byte <= TOK_LEN ends the scan, exactly like the other
+         * walks in this file.
+         */
         while ((i + 3 < BP_BASIC_PROGRAM_SPACE) &&
-               (basic_program_area[i + 3] != TOK_DATA) &&
-               (basic_program_area[i] != 0x00)) {
+               (basic_program_area[i] > TOK_LEN) &&
+               (basic_program_area[i + 3] != TOK_DATA)) {
           i += (basic_program_area[i] - TOK_LEN) + 3;
         }
 
         if ((i + 3 < BP_BASIC_PROGRAM_SPACE) &&
-            (basic_program_area[i] != 0x00) &&
+            (basic_program_area[i] > TOK_LEN) &&
             (basic_program_area[i + 3] == TOK_DATA)) {
           basic_data_read_pointer = i + 4;
         } else {
@@ -1039,7 +1066,7 @@ void interpreter(void) {
     case TOK_SEND:
       program_counter_updated = YES;
       basic_program_counter += 4;
-      bp_current_protocol()->send((int)assign());
+      basic_send((uint16_t)assign());
       handle_else_statement();
       break;
 
@@ -1250,7 +1277,14 @@ void list(void) {
       basic_program_counter += 2;
       bp_write_dec_word(lineno);
       bpSP;
-    } else if (c <= TOK_RESTORE) {
+    } else if (c <= (TOKENS + NUMTOKEN - 1)) {
+      /*
+       * Any byte below the length marker is a token, but only the ones the
+       * table actually defines may index it.  TOKENS + NUMTOKEN - 1 is the
+       * last defined token whatever it happens to be, so `LIST` cannot drift
+       * behind the table (it used to stop at RESTORE and silently dropped
+       * every later token, MODE and TIME included).
+       */
       bpSP;
       bp_write_string(tokens[c - TOKENS]);
       bpSP;
@@ -1650,7 +1684,8 @@ void save(void) {
   int i, j;
   int slot;
 
-  slot = getint_with_spaces();
+  consumewhitechars();
+  slot = getint();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
@@ -1702,7 +1737,8 @@ void load(void) {
   int i;
   int slot;
 
-  slot = getint_with_spaces();
+  consumewhitechars();
+  slot = getint();
 
   if (slot == 0) { // bpWline("Syntax error");
     BPMSG1052;
