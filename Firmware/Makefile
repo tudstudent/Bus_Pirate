@@ -84,7 +84,7 @@ SOURCES := \
 	core_bitbang/bitbang.c \
 	core_system/core.c \
 	protocol_dio/dio.c \
-	hd44780.c \
+	capability_hd44780/hd44780.c \
 	protocol_i2c/i2c.c \
 	protocol_jtag/jtag.c \
 	tool_xsvf/lenval.c \
@@ -141,6 +141,7 @@ CFLAGS := \
 	-finline \
 	-std=gnu99 \
 	-I. -Icore_system -Icore_bitbang -Icore_messages -Icore_eeprom -Itool_basic -Iprogrammer_pic -Iprotocol_keyboard -Iprotocol_sump \
+	-Icapability_hd44780 \
 	-Wall \
 	-MMD -MP \
 	-DVERSION=$(VERSION)
